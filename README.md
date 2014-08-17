@@ -1,6 +1,8 @@
 node-rabbitr
 ============
 
+RabbitMQ made easy for nodejs
+
 Init / setup
 ---------------
 
