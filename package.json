@@ -1,6 +1,6 @@
 {
   "name": "rabbitr",
-  "version": "0.0.5",
+  "version": "0.0.7",
   "description": "RabbitMQ made easy for nodejs",
   "main": "lib/rabbitr.js",
   "scripts": {
@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/gileze33/rabbitr"
+    "url": "https://github.com/gileze33/node-rabbitr"
   },
   "author": "Giles Williams",
   "license": "ISC",
