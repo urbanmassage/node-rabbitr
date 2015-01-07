@@ -1,6 +1,6 @@
 {
   "name": "rabbitr",
-  "version": "0.0.19",
+  "version": "0.1.0",
   "description": "RabbitMQ made easy for nodejs",
   "main": "lib/rabbitr.js",
   "scripts": {
@@ -13,7 +13,7 @@
   "author": "Giles Williams",
   "license": "ISC",
   "dependencies": {
-    "amqp": "^0.2.0",
+    "amqp": "https://github.com/postwait/node-amqp/tarball/master",
     "colors": "^0.6.2",
     "debug": "^1.0.4",
     "shortid": "^2.0.1"
