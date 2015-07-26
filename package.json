@@ -1,6 +1,6 @@
 {
   "name": "rabbitr",
-  "version": "2.3.0",
+  "version": "3.0.0",
   "description": "RabbitMQ made easy for nodejs",
   "main": "lib/rabbitr.js",
   "scripts": {
@@ -14,8 +14,14 @@
   "license": "ISC",
   "dependencies": {
     "amqp": "https://github.com/cloudamqp/node-amqp/tarball/master",
+    "amqplib": "^0.3.2",
     "colors": "^0.6.2",
     "debug": "^1.0.4",
+    "lock": "^0.1.2",
     "shortid": "^2.0.1"
+  },
+  "devDependencies": {
+    "chai": "^3.2.0",
+    "uuid": "^2.0.1"
   }
 }
