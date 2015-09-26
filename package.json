@@ -15,6 +15,7 @@
   "dependencies": {
     "amqp": "https://github.com/cloudamqp/node-amqp/tarball/master",
     "amqplib": "^0.3.2",
+    "async": "^1.4.2",
     "colors": "^0.6.2",
     "debug": "^1.0.4",
     "lock": "^0.1.2",
