@@ -19,7 +19,7 @@ describe('rabbitr#rpc', function() {
         });
 
         var rabbit = new Rabbitr({
-            url: 'amqp://guest:guest@localhost'
+            url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
         });
 
         var testData = {
@@ -31,17 +31,39 @@ describe('rabbitr#rpc', function() {
 
         rabbit.rpcListener(queueName, function(message, cb) {
             // here we'll assert that the data is the same
-            expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
+            expect(message.data).to.deep.equal(testData);
 
             message.queue.shift();
 
             cb(null, responseData);
         });
 
-        rabbit.rpcExec(queueName, testData, function(err, message) {
+        rabbit.rpcExec(queueName, testData, function(err, data) {
             // here we'll assert that the data is the same - hitting this point basically means the test has passed anyway :)
-            expect(JSON.stringify(responseData)).to.equal(JSON.stringify(message.data));
+            expect(err).to.not.exist;
+            expect(data).to.deep.equal(responseData);
 
+            done();
+        });
+    });
+
+    it('passes errors back', function(done) {
+        var queueName = uuid.v4() + '.rpc_test';
+        
+        var error = new Error('Test');
+
+        var rabbit = new Rabbitr({
+            url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+        });
+
+        rabbit.rpcListener(queueName, function(message, cb) {
+            message.queue.shift();
+
+            cb(error);
+        });
+
+        rabbit.rpcExec(queueName, {}, function(err, message) {
+            expect(err).to.deep.equal(error);
             done();
         });
     });
