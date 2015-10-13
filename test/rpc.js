@@ -64,6 +64,11 @@ describe('rabbitr#rpc', function() {
 
         rabbit.rpcExec(queueName, {}, function(err, message) {
             expect(err).to.deep.equal(error);
+
+            Object.keys(error).concat(['name', 'stack', 'message']).forEach(function(key) { // because a few 
+                expect(err).to.have.property(key).that.is.equal(error[key]);
+            });
+
             done();
         });
     });
