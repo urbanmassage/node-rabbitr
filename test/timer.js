@@ -20,7 +20,7 @@ describe('rabbitr#setTimer', function() {
         });
 
         var rabbit = new Rabbitr({
-            url: 'amqp://guest:guest@localhost'
+            url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
         });
 
         var start = new Date().getTime();
@@ -62,7 +62,7 @@ describe('rabbitr#setTimer', function() {
         });
 
         var rabbit = new Rabbitr({
-            url: 'amqp://guest:guest@localhost'
+            url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
         });
 
         var start = new Date().getTime();

@@ -18,7 +18,7 @@ describe('rabbitr#pubsub', function() {
         });
 
         var rabbit = new Rabbitr({
-            url: 'amqp://guest:guest@localhost'
+            url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
         });
 
         var testData = {
