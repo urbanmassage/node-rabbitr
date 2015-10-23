@@ -16,7 +16,7 @@
   "dependencies": {
     "amqplib": "^0.3.2",
     "async": "^1.4.2",
-    "colors": "^0.6.2",
+    "chalk": "^1.1.1",
     "debug": "^1.0.4",
     "lock": "^0.1.2",
     "shortid": "^2.0.1"
