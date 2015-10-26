@@ -79,7 +79,7 @@ describe('rabbitr#rpc', function() {
     it('passes custom errors', function(done) {
         var queueName = uuid.v4() + '.rpc_test';
         
-        var error = {a: 'b', c: 'd'};
+        var error = {a: 'b', c: 'd', name: 'Error'};
 
         var rabbit = new Rabbitr({
             url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
