@@ -65,10 +65,36 @@ describe('rabbitr#rpc', function() {
         rabbit.rpcExec(queueName, {}, function(err, message) {
             expect(err).to.deep.equal(error);
 
+            expect(err).to.be.an.instanceOf(Error);
+
             ['name', 'stack', 'message'].forEach(function(key) { 
                 // because these are not checked in deep-equal
                 expect(err).to.have.property(key).that.is.deep.equal(error[key]);
             });
+
+            done();
+        });
+    });
+
+    it('passes custom errors', function(done) {
+        var queueName = uuid.v4() + '.rpc_test';
+        
+        var error = {a: 'b', c: 'd'};
+
+        var rabbit = new Rabbitr({
+            url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+        });
+
+        rabbit.rpcListener(queueName, function(message, cb) {
+            message.queue.shift();
+
+            cb(error);
+        });
+
+        rabbit.rpcExec(queueName, {}, function(err, message) {
+            expect(err).to.deep.equal(error);
+
+            expect(err).not.to.be.an.instanceOf(Error);
 
             done();
         });
