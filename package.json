@@ -2,7 +2,7 @@
   "name": "rabbitr",
   "version": "7.5.0",
   "description": "RabbitMQ made easy for nodejs",
-  "main": "lib/rabbitr.js",
+  "main": "lib/rabbitr",
   "scripts": {
     "lint": "tslint lib/rabbitr.ts",
     "build": "tsc -p .",
