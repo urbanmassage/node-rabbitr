@@ -9,12 +9,12 @@ const shortId = require('shortid');
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
-function noop() {return void 0;};
+function noop() { return void 0; };
 
 interface RabbitrOptions {
   url: string;
   queuePrefix?: string;
-  setup?: (done: Function) => void;
+  setup?: (done: ErrorCallback) => void;
   connectionOpts?: {
     heartbeat?: boolean;
   };
@@ -48,13 +48,15 @@ interface IRpcListenerOptions {
   middleware?: Function[];
 }
 interface ISubscribeOptions {
+  prefetch?: number;
+  skipMiddleware?: boolean;
 }
 interface ISendOptions {
 }
 
 class TimeoutError extends Error {
   topic: string;
-  constructor(details: {topic?: string} = {}) {
+  constructor(details: { topic?: string } = {}) {
     super('Request timed out');
     this.topic = details.topic;
   }
@@ -69,12 +71,12 @@ class Rabbitr extends EventEmitter {
   subscribeQueue: {
     topic: string,
     opts?: ISubscribeOptions,
-    cb: Function,
+    cb: ErrorCallback,
   }[] = [];
   bindingsQueue: {
     exchange: string,
     queue: string,
-    cb: Function,
+    cb: ErrorCallback,
   }[] = [];
   sendQueue = [];
   setTimerQueue = [];
@@ -88,7 +90,7 @@ class Rabbitr extends EventEmitter {
   }[] = [];
   middleware = [];
 
-  protected connection;
+  protected connection: amqplib.Connection;
 
   constructor(opts: RabbitrOptions) {
     super();
@@ -123,7 +125,7 @@ class Rabbitr extends EventEmitter {
 
     debug('using connection url', this.opts.url);
 
-    amqplib.connect(this.opts.url, this.opts.connectionOpts, (err, conn) => {
+    amqplib.connect(this.opts.url, this.opts.connectionOpts, (err: Error, conn: amqplib.Connection): void => {
       if (err) {
         throw err;
       }
@@ -135,7 +137,7 @@ class Rabbitr extends EventEmitter {
         throw new Error('Disconnected from RabbitMQ');
       });
 
-      conn.createChannel((err, channel) => {
+      conn.createChannel((err: Error, channel: amqplib.Channel): void => {
         if (err) {
           throw err;
         }
@@ -167,39 +169,44 @@ class Rabbitr extends EventEmitter {
     this.ready = true;
 
     debug('ready and has queue sizes', this.subscribeQueue.length, this.bindingsQueue.length, this.rpcListenerQueue.length, this.sendQueue.length, this.rpcExecQueue.length);
-    for (var i=0; i<this.subscribeQueue.length; i++) {
-      this.subscribe(this.subscribeQueue[i].topic, this.subscribeQueue[i].opts, this.subscribeQueue[i].cb, true);
+    for (var i = 0; i < this.subscribeQueue.length; i++) {
+      this.subscribe(
+        this.subscribeQueue[i].topic,
+        this.subscribeQueue[i].opts,
+        this.subscribeQueue[i].cb,
+        true
+      );
     }
     this.subscribeQueue = [];
-    for (var i=0; i<this.bindingsQueue.length; i++) {
+    for (var i = 0; i < this.bindingsQueue.length; i++) {
       this.bindExchangeToQueue(this.bindingsQueue[i].exchange, this.bindingsQueue[i].queue, this.bindingsQueue[i].cb, true);
     }
     this.bindingsQueue = [];
-    for (var i=0; i<this.rpcListenerQueue.length; i++) {
+    for (var i = 0; i < this.rpcListenerQueue.length; i++) {
       this.rpcListener(this.rpcListenerQueue[i].topic, this.rpcListenerQueue[i].opts, this.rpcListenerQueue[i].executor, true);
     }
     this.rpcListenerQueue = [];
 
     // send anything in send queue but clear it after
-    for (var i=0; i<this.sendQueue.length; i++) {
+    for (var i = 0; i < this.sendQueue.length; i++) {
       this.send(this.sendQueue[i].topic, this.sendQueue[i].data, this.sendQueue[i].cb, this.sendQueue[i].opts);
     }
     this.sendQueue = [];
 
     // send anything in setTimer queue but clear it after
-    for (var i=0; i<this.setTimerQueue.length; i++) {
+    for (var i = 0; i < this.setTimerQueue.length; i++) {
       this.setTimer(this.setTimerQueue[i].topic, this.setTimerQueue[i].uniqueID, this.setTimerQueue[i].data, this.setTimerQueue[i].ttl, this.setTimerQueue[i].cb);
     }
     this.setTimerQueue = [];
 
     // send anything in clearTimer queue but clear it after
-    for (var i=0; i<this.clearTimerQueue.length; i++) {
+    for (var i = 0; i < this.clearTimerQueue.length; i++) {
       this.clearTimer(this.clearTimerQueue[i].topic, this.clearTimerQueue[i].uniqueID, this.clearTimerQueue[i].cb);
     }
     this.clearTimerQueue = [];
 
     // send anything in rpcExec queue but clear it after
-    for (var i=0; i<this.rpcExecQueue.length; i++) {
+    for (var i = 0; i < this.rpcExecQueue.length; i++) {
       this.rpcExec(
         this.rpcExecQueue[i].topic,
         this.rpcExecQueue[i].data,
@@ -240,10 +247,11 @@ class Rabbitr extends EventEmitter {
       if (cb) cb(null);
     });
   }
-  subscribe(topic: string, opts?: ISubscribeOptions, cb?: Function, alreadyInQueue?: boolean): void;
-  subscribe(topic: string, opts?, cb?, alreadyInQueue?) {
+  subscribe(topic: string, cb?: ErrorCallback): void;
+  subscribe(topic: string, opts?: ISubscribeOptions, cb?: ErrorCallback, alreadyInQueue?: boolean): void;
+  subscribe(topic: string, opts?, cb?: ErrorCallback, alreadyInQueue?: boolean): void {
     if (!cb) {
-      cb = opts;
+      cb = <ErrorCallback>opts;
       opts = null;
     }
 
@@ -256,13 +264,15 @@ class Rabbitr extends EventEmitter {
       });
     }
 
+    const options: ISubscribeOptions = opts;
+
     if (!this.ready) {
       return;
     }
 
-    debug(chalk.cyan('subscribe'), topic, opts);
+    debug(chalk.cyan('subscribe'), topic, options);
 
-    this.connection.createChannel((err, channel) => {
+    this.connection.createChannel((err: Error, channel: amqplib.Channel): void => {
       if (err) {
         this.emit('error', err);
         if (cb) cb(err);
@@ -274,8 +284,7 @@ class Rabbitr extends EventEmitter {
           return cb(err);
         }
 
-        // should this be arbritrarily hard coded?
-        channel.prefetch(opts ? opts.prefetch || 1 : 1);
+        channel.prefetch(options ? options.prefetch || 1 : 1);
 
         const processMessage = function processMessage(msg) {
           if (!msg) return;
@@ -331,7 +340,7 @@ class Rabbitr extends EventEmitter {
             }
           };
 
-          var skipMiddleware = opts ? opts.skipMiddleware || false : false;
+          var skipMiddleware = options ? options.skipMiddleware || false : false;
 
           if (skipMiddleware) {
             return this.emit(topic, message);
@@ -355,7 +364,7 @@ class Rabbitr extends EventEmitter {
       });
     });
   }
-  bindExchangeToQueue(exchange: string, queue: string, cb?: Function, alreadyInQueue?: boolean) {
+  bindExchangeToQueue(exchange: string, queue: string, cb?: ErrorCallback, alreadyInQueue?: boolean) {
     if (!alreadyInQueue) {
       debug('adding item to bindings queue');
       this.bindingsQueue.push({
@@ -388,9 +397,7 @@ class Rabbitr extends EventEmitter {
           return;
         }
 
-        channel.close();
-
-        if (cb) cb(null);
+        channel.close(cb);
       });
     });
   };
@@ -510,7 +517,7 @@ class Rabbitr extends EventEmitter {
 
       channel.assertQueue(this._formatName(returnQueueName), {
         exclusive: true,
-        expires: (this.opts.defaultRPCExpiry*1 + 1000)
+        expires: (this.opts.defaultRPCExpiry * 1 + 1000)
       });
 
       debug('using rpc return queue "%s"', chalk.cyan(returnQueueName));
@@ -518,9 +525,9 @@ class Rabbitr extends EventEmitter {
         // delete the return queue and close exc channel
         try {
           channel.deleteQueue(this._formatName(returnQueueName), function() {
-            channel.close();
+            channel.close(noop);
           });
-        } catch(e) {
+        } catch (e) {
           console.log('rabbitr cleanup exception', e);
         }
       }.bind(this);
@@ -530,7 +537,7 @@ class Rabbitr extends EventEmitter {
       var timeout = setTimeout(function() {
         debug('request timeout firing for', rpcQueue, 'to', returnQueueName);
 
-        cb(new TimeoutError({topic: rpcQueue}));
+        cb(new TimeoutError({ topic: rpcQueue }));
 
         cleanup();
       }, timeoutMS);
@@ -585,7 +592,7 @@ class Rabbitr extends EventEmitter {
         const obj = {
           d: data,
           returnQueue: this._formatName(returnQueueName),
-          expiration: now+timeoutMS
+          expiration: now + timeoutMS
         };
         this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(JSON.stringify(obj)), {
           contentType: 'application/json',
@@ -620,7 +627,7 @@ class Rabbitr extends EventEmitter {
     var rpcQueue = this._rpcQueueName(topic);
 
     (<any>opts).skipMiddleware = true;
-    this.subscribe(rpcQueue, opts, noop);
+    this.subscribe(rpcQueue, opts);
 
     debug('has rpcListener for', topic);
 
@@ -659,8 +666,8 @@ class Rabbitr extends EventEmitter {
             isError: isError,
             response: response,
           })), {
-            contentType: 'application/json'
-          });
+              contentType: 'application/json'
+            });
         };
 
         function _runExecutor() {
