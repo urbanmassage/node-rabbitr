@@ -1,11 +1,11 @@
 import async = require('async');
 import chalk = require('chalk');
 import {EventEmitter} from 'events';
+import amqplib = require('amqplib/callback_api');
 
-var amqplib = require('amqplib/callback_api');
-var debug = require('debug')('rabbitr');
-var extend = require('util')._extend;
-var shortId = require('shortid');
+const debug = require('debug')('rabbitr');
+const extend = require('util')._extend;
+const shortId = require('shortid');
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
