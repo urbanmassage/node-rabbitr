@@ -9,8 +9,7 @@ var shortId = require('shortid');
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
-function noop() {};
-var lock = function(_, cb) { cb(noop); }
+function noop() {return void 0;};
 
 interface RabbitrOptions {
   url: string;
@@ -88,10 +87,6 @@ class Rabbitr extends EventEmitter {
     cb: Callback<any>
   }[] = [];
   middleware = [];
-
-  private _queueChannelCache = {};
-  //_exchangeChannelCache = {};
-  subscribes = {}; // is this still necessary??
 
   protected connection;
 
@@ -216,7 +211,7 @@ class Rabbitr extends EventEmitter {
   }
 
   private _formatName(name) {
-    if (this.opts.queuePrefix != '') {
+    if (this.opts.queuePrefix) {
       name = this.opts.queuePrefix + '.' + name;
     }
 
@@ -252,7 +247,7 @@ class Rabbitr extends EventEmitter {
       opts = null;
     }
 
-    if (alreadyInQueue != true) {
+    if (!alreadyInQueue) {
       debug('adding item to sub queue');
       this.subscribeQueue.push({
         topic,
@@ -286,7 +281,7 @@ class Rabbitr extends EventEmitter {
           if (!msg) return;
 
           var data = msg.content.toString();
-          if (msg.properties.contentType == 'application/json') {
+          if (msg.properties.contentType === 'application/json') {
             data = JSON.parse(data);
           }
 
@@ -361,7 +356,7 @@ class Rabbitr extends EventEmitter {
     });
   }
   bindExchangeToQueue(exchange: string, queue: string, cb?: Function, alreadyInQueue?: boolean) {
-    if (alreadyInQueue != true) {
+    if (!alreadyInQueue) {
       debug('adding item to bindings queue');
       this.bindingsQueue.push({
         exchange,
@@ -544,7 +539,7 @@ class Rabbitr extends EventEmitter {
         if (!msg) return;
 
         var data = msg.content.toString();
-        if (msg.properties.contentType == 'application/json') {
+        if (msg.properties.contentType === 'application/json') {
           data = JSON.parse(data);
         }
 
@@ -609,7 +604,7 @@ class Rabbitr extends EventEmitter {
       opts = <IRpcListenerOptions>{};
     }
 
-    if (alreadyInQueue != true) {
+    if (!alreadyInQueue) {
       debug('adding item to rpcListener queue');
       this.rpcListenerQueue.push({
         topic: topic,
@@ -695,5 +690,5 @@ class Rabbitr extends EventEmitter {
     }, next);
   }
 };
-export = Rabbitr;
 
+export = Rabbitr;

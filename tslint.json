@@ -1,0 +1,19 @@
+{
+  "rules": {
+    "class-name": true,
+    "jsdoc-format": true,
+    "indent": [true, "spaces"],
+    "no-duplicate-key": true,
+    "no-duplicate-variable": true,
+    "no-empty": true,
+    "no-eval": true,
+    "no-trailing-whitespace": true,
+    "no-unreachable": true,
+    "no-unused-expression": true,
+    "no-unused-variable": true,
+    "quotemark": [true, "single"],
+    "radix": true,
+    "trailing-comma": [true, "multiline"],
+    "triple-equals": true
+  }
+}

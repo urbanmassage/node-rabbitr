@@ -4,6 +4,7 @@
   "description": "RabbitMQ made easy for nodejs",
   "main": "lib/rabbitr.js",
   "scripts": {
+    "lint": "tslint lib/rabbitr.ts",
     "build": "tsc -p .",
     "pretest": "npm run build",
     "test": "mocha",
@@ -28,6 +29,7 @@
     "istanbul": "^0.4.0",
     "mocha": "^2.3.3",
     "mocha-junit-reporter": "^1.8.0",
+    "tslint": "^2.5.1",
     "typescript": "^1.6.2",
     "uuid": "^2.0.1"
   }
