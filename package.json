@@ -32,5 +32,8 @@
     "tslint": "^2.5.1",
     "typescript": "^1.6.2",
     "uuid": "^2.0.1"
+  },
+  "typescript": {
+    "definition": "lib/rabbitr.d.ts"
   }
 }

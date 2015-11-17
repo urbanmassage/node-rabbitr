@@ -11,47 +11,8 @@ const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
 function noop() { return void 0; };
 
-interface RabbitrOptions {
-  url: string;
-  queuePrefix?: string;
-  setup?: (done: ErrorCallback) => void;
-  connectionOpts?: {
-    heartbeat?: boolean;
-  };
-  ackWarningTimeout?: number;
-  autoAckOnTimeout?: RabbitrAckTimeoutOption;
-  defaultRPCExpiry?: number;
-}
-
-enum RabbitrAckTimeoutOption {
-  Acknowledge = <any>'acknowledge',
-  Reject = <any>'reject',
-}
-
 function hasProp(obj: Object, prop: string): boolean {
   return Object.prototype.hasOwnProperty.call(obj, prop);
-}
-
-interface ErrorCallback {
-  (err?: Error): void;
-}
-
-interface Callback<T> {
-  (err?: Error): void;
-  (err?: Error, data?: T): void;
-}
-
-interface IRpcExecOptions {
-  timeout?: number;
-}
-interface IRpcListenerOptions {
-  middleware?: Function[];
-}
-interface ISubscribeOptions {
-  prefetch?: number;
-  skipMiddleware?: boolean;
-}
-interface ISendOptions {
 }
 
 class TimeoutError extends Error {
@@ -63,14 +24,14 @@ class TimeoutError extends Error {
 }
 
 class Rabbitr extends EventEmitter {
-  opts: RabbitrOptions;
+  opts: Rabbitr.IOptions;
 
   protected ready = false;
   protected doneSetup = false;
   protected connected = false;
   subscribeQueue: {
     topic: string,
-    opts?: ISubscribeOptions,
+    opts?: Rabbitr.ISubscribeOptions,
     cb: ErrorCallback,
   }[] = [];
   bindingsQueue: {
@@ -85,14 +46,14 @@ class Rabbitr extends EventEmitter {
   rpcExecQueue: {
     topic: string,
     data: any,
-    opts: IRpcExecOptions,
-    cb: Callback<any>
+    opts: Rabbitr.IRpcExecOptions,
+    cb: Rabbitr.Callback<any>
   }[] = [];
   middleware = [];
 
   protected connection: amqplib.Connection;
 
-  constructor(opts: RabbitrOptions) {
+  constructor(opts: Rabbitr.IOptions) {
     super();
 
     // you MUST provide a 'url' rather than separate 'host', 'password', 'vhost' now
@@ -226,7 +187,7 @@ class Rabbitr extends EventEmitter {
   }
 
   // standard pub/sub stuff
-  send(topic: string, data: any, cb?: Function, opts?: ISendOptions) {
+  send(topic: string, data: any, cb?: Function, opts?: Rabbitr.ISendOptions) {
     if (!this.ready) {
       debug('adding item to send queue');
       return this.sendQueue.push({
@@ -247,11 +208,11 @@ class Rabbitr extends EventEmitter {
       if (cb) cb(null);
     });
   }
-  subscribe(topic: string, cb?: ErrorCallback): void;
-  subscribe(topic: string, opts?: ISubscribeOptions, cb?: ErrorCallback, alreadyInQueue?: boolean): void;
-  subscribe(topic: string, opts?, cb?: ErrorCallback, alreadyInQueue?: boolean): void {
+  subscribe(topic: string, cb?: Rabbitr.ErrorCallback): void;
+  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback, alreadyInQueue?: boolean): void;
+  subscribe(topic: string, opts?, cb?: Rabbitr.ErrorCallback, alreadyInQueue?: boolean): void {
     if (!cb) {
-      cb = <ErrorCallback>opts;
+      cb = <Rabbitr.ErrorCallback>opts;
       opts = null;
     }
 
@@ -264,7 +225,7 @@ class Rabbitr extends EventEmitter {
       });
     }
 
-    const options: ISubscribeOptions = opts;
+    const options: Rabbitr.ISubscribeOptions = opts;
 
     if (!this.ready) {
       return;
@@ -305,10 +266,10 @@ class Rabbitr extends EventEmitter {
               message: data
             });
 
-            if (this.opts.autoAckOnTimeout === RabbitrAckTimeoutOption.Acknowledge) {
+            if (this.opts.autoAckOnTimeout === Rabbitr.AckTimeoutOption.Acknowledge) {
               acked = true;
               channel.ack(msg);
-            } else if (this.opts.autoAckOnTimeout === RabbitrAckTimeoutOption.Reject) {
+            } else if (this.opts.autoAckOnTimeout === Rabbitr.AckTimeoutOption.Reject) {
               acked = true;
               channel.nack(msg);
             }
@@ -475,14 +436,14 @@ class Rabbitr extends EventEmitter {
   private _rpcQueueName(topic: string): string {
     return 'rpc.' + topic;
   }
-  rpcExec(topic: string, data: any, cb?: Callback<any>): void;
-  rpcExec(topic: string, data: any, opts: IRpcExecOptions, cb?: Callback<any>): void;
+  rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): void;
+  rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): void;
 
   rpcExec(topic: string, data: any, opts, cb?) {
     if ('function' === typeof opts) {
       // shift arguments
-      cb = <Callback<any>>opts;
-      opts = <IRpcExecOptions>{};
+      cb = <Rabbitr.Callback<any>>opts;
+      opts = <Rabbitr.IRpcExecOptions>{};
     }
 
     if (!this.ready) {
@@ -603,12 +564,12 @@ class Rabbitr extends EventEmitter {
   }
 
   // rpcListener(topic: string, executor: Function, alreadyInQueue?: boolean): void;
-  rpcListener(topic: string, opts: IRpcListenerOptions, executor?: Function, alreadyInQueue?: boolean): void {
+  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions, executor?: Function, alreadyInQueue?: boolean): void {
     if ('function' === typeof opts) {
       // shift arguments
       alreadyInQueue = !!executor;
       executor = <Function>opts;
-      opts = <IRpcListenerOptions>{};
+      opts = <Rabbitr.IRpcListenerOptions>{};
     }
 
     if (!alreadyInQueue) {
@@ -649,7 +610,7 @@ class Rabbitr extends EventEmitter {
 
       this._runMiddleware(message, (middlewareErr) => {
         // TODO - how to handle common error function thing for middleware?
-        var _cb: Callback<any> = (err?, response?): void => {
+        var _cb: Rabbitr.Callback<any> = (err?, response?): void => {
           if (err) {
             debug(chalk.cyan('rpcListener') + ' ' + chalk.red('hit error'), err);
           }
@@ -697,5 +658,46 @@ class Rabbitr extends EventEmitter {
     }, next);
   }
 };
+
+module Rabbitr {
+  export interface IOptions {
+    url: string;
+    queuePrefix?: string;
+    setup?: (done: ErrorCallback) => void;
+    connectionOpts?: {
+      heartbeat?: boolean;
+    };
+    ackWarningTimeout?: number;
+    autoAckOnTimeout?: AckTimeoutOption;
+    defaultRPCExpiry?: number;
+  }
+
+  export enum AckTimeoutOption {
+    Acknowledge = <any>'acknowledge',
+    Reject = <any>'reject',
+  }
+
+  export interface ErrorCallback {
+    (err?: Error): void;
+  }
+
+  export interface Callback<T> {
+    (err?: Error): void;
+    (err?: Error, data?: T): void;
+  }
+
+  export interface IRpcExecOptions {
+    timeout?: number;
+  }
+  export interface IRpcListenerOptions {
+    middleware?: Function[];
+  }
+  export interface ISubscribeOptions {
+    prefetch?: number;
+    skipMiddleware?: boolean;
+  }
+  export interface ISendOptions {
+  }
+}
 
 export = Rabbitr;

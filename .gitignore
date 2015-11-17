@@ -4,3 +4,6 @@ coverage/
 **.js
 **.map
 **.log
+lib/*.d.ts
+test/*.d.ts
+examples/*.d.ts
