@@ -1,4 +1,4 @@
-var Rabbitr = require('../lib/rabbitr');
+var Rabbitr = require('../');
 var rabbit = new Rabbitr({
   url: 'amqp://guest:guest@localhost'
 });

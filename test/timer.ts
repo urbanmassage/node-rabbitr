@@ -1,6 +1,6 @@
 var uuid = require('uuid');
 var expect = require('chai').expect;
-var Rabbitr = require('../lib/rabbitr');
+var Rabbitr = require('../');
 
 var kAcceptableTimerThreshold = 500;
 

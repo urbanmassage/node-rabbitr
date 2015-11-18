@@ -2,13 +2,14 @@
   "name": "rabbitr",
   "version": "7.5.0",
   "description": "RabbitMQ made easy for nodejs",
-  "main": "lib/rabbitr",
+  "main": "index",
   "scripts": {
-    "lint": "tslint lib/rabbitr.ts",
+    "lint": "tslint index.ts",
     "build": "tsc -p .",
     "pretest": "npm run build",
     "test": "mocha",
-    "coverage": "istanbul cover _mocha"
+    "coverage": "istanbul cover _mocha --",
+    "postcoverage": "node scripts/map-coverage.js"
   },
   "repository": {
     "type": "git",
@@ -26,7 +27,9 @@
   },
   "devDependencies": {
     "chai": "^3.2.0",
+    "codecov.io": "^0.1.6",
     "istanbul": "^0.4.0",
+    "lcov-sourcemap": "^0.1.3",
     "mocha": "^2.3.3",
     "mocha-junit-reporter": "^1.8.0",
     "tslint": "^2.5.1",
@@ -34,6 +37,6 @@
     "uuid": "^2.0.1"
   },
   "typescript": {
-    "definition": "lib/rabbitr.d.ts"
+    "definition": "index.d.ts"
   }
 }

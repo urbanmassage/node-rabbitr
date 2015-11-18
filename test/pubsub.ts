@@ -1,4 +1,4 @@
-import Rabbitr = require('../lib/rabbitr');
+import Rabbitr = require('../');
 import {expect} from 'chai';
 var uuid = require('uuid');
 
