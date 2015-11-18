@@ -11,6 +11,30 @@ const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
 function noop() { return void 0; };
 
+function stringify(obj: any) {
+  return JSON.stringify(obj, function(key: string, value: any) {
+    if (value instanceof Buffer) {
+      value = value.toJSON();
+      if (Array.isArray(value)) {
+        // NODE <= 0.12
+        value = {
+          type: 'Buffer',
+          data: value,
+        };
+      }
+    }
+    return value;
+  });
+}
+
+function parse(json: string) {
+  return JSON.parse(json, function(key, value) {
+    return value && value.type === 'Buffer'
+      ? new Buffer(value.data)
+      : value;
+  });
+}
+
 function hasProp(obj: Object, prop: string): boolean {
   return Object.prototype.hasOwnProperty.call(obj, prop);
 }
@@ -212,7 +236,7 @@ class Rabbitr extends EventEmitter {
     debug(chalk.yellow('send'), topic, data, opts);
 
     this._publishChannel.assertExchange(this._formatName(topic), 'topic', {}, () => {
-      this._publishChannel.publish(this._formatName(topic), '*', new Buffer(JSON.stringify(data)), {
+      this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
         contentType: 'application/json'
       });
 
@@ -263,11 +287,7 @@ class Rabbitr extends EventEmitter {
 
           var data = msg.content.toString();
           if (msg.properties.contentType === 'application/json') {
-            data = JSON.parse(data, function(key, value) {
-              return value && value.type === 'Buffer'
-                ? new Buffer(value.data)
-                : value;
-            });
+            data = parse(data);
           }
 
           debug('got', topic, data);
@@ -412,7 +432,7 @@ class Rabbitr extends EventEmitter {
         return;
       }
 
-      this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(JSON.stringify(data)), {
+      this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
         contentType: 'application/json',
         expiration: ttl
       }, (err) => {
@@ -523,11 +543,7 @@ class Rabbitr extends EventEmitter {
 
         var data = msg.content.toString();
         if (msg.properties.contentType === 'application/json') {
-          data = JSON.parse(data, function(key, value) {
-            return value && value.type === 'Buffer'
-              ? new Buffer(value.data)
-              : value;
-          });
+          data = parse(data);
         }
 
         if (processed) {
@@ -574,7 +590,7 @@ class Rabbitr extends EventEmitter {
           returnQueue: this._formatName(returnQueueName),
           expiration: now + timeoutMS
         };
-        this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(JSON.stringify(obj)), {
+        this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(obj)), {
           contentType: 'application/json',
           expiration: timeoutMS
         });
@@ -638,16 +654,18 @@ class Rabbitr extends EventEmitter {
           message.ack();
 
           var isError = err instanceof Error;
-          var errJSON = isError ? JSON.stringify(err, Object.keys(err).concat(['name', 'type', 'arguments', 'stack', 'message'])) : JSON.stringify(err);
+          var errJSON = isError ?
+              JSON.stringify(err, Object.keys(err).concat(['name', 'type', 'arguments', 'stack', 'message'])) :
+              JSON.stringify(err);
 
           // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
-          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(JSON.stringify({
+          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify({
             error: err ? errJSON : undefined,
             isError: isError,
             response: response,
           })), {
-              contentType: 'application/json'
-            });
+            contentType: 'application/json'
+          });
         };
 
         function _runExecutor() {
