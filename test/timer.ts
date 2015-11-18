@@ -31,7 +31,10 @@ describe('rabbitr#setTimer', function() {
     };
 
     rabbit.subscribe(queueName);
-    rabbit.bindExchangeToQueue(queueName, queueName);
+    rabbit.bindExchangeToQueue(queueName, queueName, function() {
+      rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY);
+    });
+
     rabbit.on(queueName, function(message) {
       message.ack();
 
@@ -42,8 +45,6 @@ describe('rabbitr#setTimer', function() {
 
       done();
     });
-
-    rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY);
   });
 
   it('should not receive a message if #clearTimer is called', function(done) {
