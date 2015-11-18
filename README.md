@@ -2,6 +2,7 @@
 [![CircleCI](https://img.shields.io/circleci/project/urbanmassage/node-rabbitr.svg)](https://circleci.com/gh/urbanmassage/node-rabbitr)
 [![npm](https://img.shields.io/npm/v/rabbitr.svg)](https://www.npmjs.com/package/rabbitr)
 [![npm](https://img.shields.io/npm/dt/rabbitr.svg)](https://www.npmjs.com/package/rabbitr)
+[![Codecov](https://img.shields.io/codecov/c/github/urbanmassage/node-rabbitr.svg)](https://codecov.io/github/urbanmassage/node-rabbitr)
 
 RabbitMQ made easy for nodejs
 
@@ -24,7 +25,7 @@ rabbit.on('sms.send.booking.create', function(message) {
 	// send an sms
 	message.ack();
 });
-    
+
 // in another module
 rabbit.subscribe('email.send.booking.create');
 rabbit.bindExchangeToQueue('booking.create', 'email.send.booking.create');
@@ -47,11 +48,11 @@ rabbit.bindExchangeToQueue('booking.create', 'booking.not-confirmed.timer.set');
 rabbit.on('booking.not-confirmed.timer.set', function(message) {
 	// do something to calculate how long we want the timer to last
 	var timeFromNow = 900000; // 15 mins
-	
+
 	rabbit.setTimer('booking.not-confirmed.timer.fire', message.data.id, {
 	    id: message.data.id
 	}, timeFromNow);
-	
+
 	message.ack();
 });
 
@@ -60,7 +61,7 @@ rabbit.subscribe('booking.not-confirmed.timer.clear');
 rabbit.bindExchangeToQueue('booking.confirm', 'booking.not-confirmed.timer.clear');
 rabbit.on('booking.not-confirmed.timer.clear', function(message) {
 	rabbit.clearTimer('booking.not-confirmed.timer.fire', message.data.id);
-        
+
 	message.ack();
 });
 
@@ -85,25 +86,25 @@ Use Rabbitr's RPC methods if you need to do something and get a response back, a
 ```js
 rabbit.rpcListener('intelli-travel.directions', function(message, cb) {
 	// do something with message.data
-	
+
 	cb(null, {
 	    rpc: 'is cool'
 	});
 });
 ```
-    
+
 ### Define the worker's method (parallel, kind of)
 
 ```js
 rabbit.rpcListener('intelli-travel.directions', function(message, cb) {
-	message.queue.shift(); // immediately moves on to processing the next 
+	message.queue.shift(); // immediately moves on to processing the next
 	// do something with message.data
-	
+
 	cb(null, {
 	    rpc: 'is cool'
 	});
-	
-	message.queue.shift(); 
+
+	message.queue.shift();
 });
 ```
 
