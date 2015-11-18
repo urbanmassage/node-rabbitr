@@ -252,7 +252,11 @@ class Rabbitr extends EventEmitter {
 
           var data = msg.content.toString();
           if (msg.properties.contentType === 'application/json') {
-            data = JSON.parse(data);
+            data = JSON.parse(data, function(key, value) {
+              return value && value.type === 'Buffer'
+                ? new Buffer(value.data)
+                : value;
+            });
           }
 
           debug('got', topic, data);
@@ -508,7 +512,11 @@ class Rabbitr extends EventEmitter {
 
         var data = msg.content.toString();
         if (msg.properties.contentType === 'application/json') {
-          data = JSON.parse(data);
+          data = JSON.parse(data, function(key, value) {
+            return value && value.type === 'Buffer'
+              ? new Buffer(value.data)
+              : value;
+          });
         }
 
         if (processed) {
