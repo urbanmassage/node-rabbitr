@@ -3,10 +3,10 @@ import {expect} from 'chai';
 var uuid = require('uuid');
 
 describe('rabbitr#pubsub', function() {
-  let rabbit;
-  before(() => rabbit = new Rabbitr({
+  const rabbit = new Rabbitr({
     url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
-  }));
+  });
+  before((done) => rabbit.whenReady(done));
 
   it('should receive messages on the specified queue', function(done) {
     var queueName = uuid.v4() + '.pubsub_test';

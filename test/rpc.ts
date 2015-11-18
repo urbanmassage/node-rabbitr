@@ -3,10 +3,10 @@ import {expect} from 'chai';
 var uuid = require('uuid');
 
 describe('rabbitr#rpc', function() {
-  let rabbit;
-  before(() => rabbit = new Rabbitr({
+  const rabbit = new Rabbitr({
     url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
-  }));
+  });
+  before((done) => rabbit.whenReady(done));
 
   it('should receive messages on rpcListener', function(done) {
     var queueName = uuid.v4() + '.rpc_test';

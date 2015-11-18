@@ -176,6 +176,17 @@ class Rabbitr extends EventEmitter {
       );
     }
     this.rpcExecQueue = [];
+
+    while (this.readyQueue.length) {
+      this.readyQueue.pop()();
+    }
+  }
+
+  private readyQueue: Function[] = [];
+
+  public whenReady(callback: Function) {
+    if (this.ready) return callback();
+    this.readyQueue.push(callback);
   }
 
   private _formatName(name) {
