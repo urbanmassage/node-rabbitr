@@ -134,23 +134,35 @@ class Rabbitr extends EventEmitter {
       this.subscribe(
         this.subscribeQueue[i].topic,
         this.subscribeQueue[i].opts,
-        this.subscribeQueue[i].cb,
-        true
+        this.subscribeQueue[i].cb
       );
     }
     this.subscribeQueue = [];
     for (var i = 0; i < this.bindingsQueue.length; i++) {
-      this.bindExchangeToQueue(this.bindingsQueue[i].exchange, this.bindingsQueue[i].queue, this.bindingsQueue[i].cb, true);
+      this.bindExchangeToQueue(
+        this.bindingsQueue[i].exchange,
+        this.bindingsQueue[i].queue,
+        this.bindingsQueue[i].cb
+      );
     }
     this.bindingsQueue = [];
     for (var i = 0; i < this.rpcListenerQueue.length; i++) {
-      this.rpcListener(this.rpcListenerQueue[i].topic, this.rpcListenerQueue[i].opts, this.rpcListenerQueue[i].executor, true);
+      this.rpcListener(
+        this.rpcListenerQueue[i].topic,
+        this.rpcListenerQueue[i].opts,
+        this.rpcListenerQueue[i].executor
+      );
     }
     this.rpcListenerQueue = [];
 
     // send anything in send queue but clear it after
     for (var i = 0; i < this.sendQueue.length; i++) {
-      this.send(this.sendQueue[i].topic, this.sendQueue[i].data, this.sendQueue[i].cb, this.sendQueue[i].opts);
+      this.send(
+        this.sendQueue[i].topic,
+        this.sendQueue[i].data,
+        this.sendQueue[i].cb,
+        this.sendQueue[i].opts
+      );
     }
     this.sendQueue = [];
 
@@ -176,6 +188,17 @@ class Rabbitr extends EventEmitter {
       );
     }
     this.rpcExecQueue = [];
+
+    while (this.readyQueue.length) {
+      this.readyQueue.shift()();
+    }
+  }
+
+  private readyQueue: Function[] = [];
+
+  public whenReady(callback: Function) {
+    if (this.ready) return callback();
+    this.readyQueue.push(callback);
   }
 
   private _formatName(name) {
@@ -209,27 +232,25 @@ class Rabbitr extends EventEmitter {
     });
   }
   subscribe(topic: string, cb?: Rabbitr.ErrorCallback): void;
-  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback, alreadyInQueue?: boolean): void;
-  subscribe(topic: string, opts?, cb?: Rabbitr.ErrorCallback, alreadyInQueue?: boolean): void {
+  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): void;
+  subscribe(topic: string, opts?, cb?: Rabbitr.ErrorCallback): void {
     if (!cb) {
       cb = <Rabbitr.ErrorCallback>opts;
       opts = null;
     }
 
-    if (!alreadyInQueue) {
+    if (!this.ready) {
       debug('adding item to sub queue');
       this.subscribeQueue.push({
         topic,
         opts,
         cb,
       });
+
+      return;
     }
 
     const options: Rabbitr.ISubscribeOptions = opts;
-
-    if (!this.ready) {
-      return;
-    }
 
     debug(chalk.cyan('subscribe'), topic, options);
 
@@ -325,17 +346,14 @@ class Rabbitr extends EventEmitter {
       });
     });
   }
-  bindExchangeToQueue(exchange: string, queue: string, cb?: ErrorCallback, alreadyInQueue?: boolean) {
-    if (!alreadyInQueue) {
+  bindExchangeToQueue(exchange: string, queue: string, cb?: ErrorCallback) {
+    if (!this.ready) {
       debug('adding item to bindings queue');
       this.bindingsQueue.push({
         exchange,
         queue,
         cb,
       });
-    }
-
-    if (!this.ready) {
       return;
     }
 
@@ -563,25 +581,21 @@ class Rabbitr extends EventEmitter {
     });
   }
 
-  // rpcListener(topic: string, executor: Function, alreadyInQueue?: boolean): void;
-  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions, executor?: Function, alreadyInQueue?: boolean): void {
+  // rpcListener(topic: string, executor: Function): void;
+  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions, executor?: Function): void {
     if ('function' === typeof opts) {
       // shift arguments
-      alreadyInQueue = !!executor;
       executor = <Function>opts;
       opts = <Rabbitr.IRpcListenerOptions>{};
     }
 
-    if (!alreadyInQueue) {
+    if (!this.ready) {
       debug('adding item to rpcListener queue');
       this.rpcListenerQueue.push({
         topic: topic,
         executor: executor,
         opts: opts
       });
-    }
-
-    if (!this.ready) {
       return;
     }
 

@@ -3,22 +3,22 @@ import {expect} from 'chai';
 var uuid = require('uuid');
 
 describe('rabbitr#pubsub', function() {
-  it('should receive messages on the specified queue', function(done) {
-    this.timeout(5000);
+  const rabbit = new Rabbitr({
+    url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+  });
+  before((done) => rabbit.whenReady(done));
 
+  it('should receive messages on the specified queue', function(done) {
+    var exchangeName = uuid.v4() + '.pubsub_test';
     var queueName = uuid.v4() + '.pubsub_test';
 
     after(function(done) {
       // cleanup
-      rabbit._cachedChannel.deleteExchange(queueName);
+      rabbit._cachedChannel.deleteExchange(exchangeName);
       rabbit._cachedChannel.deleteQueue(queueName);
 
       // give rabbit time enough to perform cleanup
-      setTimeout(done, 500);
-    });
-
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+      setTimeout(done, 50);
     });
 
     var testData = {
@@ -26,7 +26,10 @@ describe('rabbitr#pubsub', function() {
     };
 
     rabbit.subscribe(queueName);
-    rabbit.bindExchangeToQueue(queueName, queueName);
+    rabbit.bindExchangeToQueue(exchangeName, queueName, () =>
+      rabbit.send(exchangeName, testData)
+    );
+
     rabbit.on(queueName, function(message) {
       message.ack();
 
@@ -35,9 +38,5 @@ describe('rabbitr#pubsub', function() {
 
       done();
     });
-
-    setTimeout(function() {
-      rabbit.send(queueName, testData);
-    }, 1000);
   });
 });

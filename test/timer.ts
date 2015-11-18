@@ -2,11 +2,16 @@ var uuid = require('uuid');
 var expect = require('chai').expect;
 var Rabbitr = require('../');
 
-var kAcceptableTimerThreshold = 500;
+var kAcceptableTimerThreshold = 10;
 
 describe('rabbitr#setTimer', function() {
+  const rabbit = new Rabbitr({
+    url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+  });
+  before((done) => rabbit.whenReady(done));
+
   it('should receive a message after a set number of milliseconds', function(done) {
-    this.timeout(10000);
+    const DELAY = 50;
 
     var queueName = uuid.v4() + '.timer_test';
 
@@ -16,16 +21,10 @@ describe('rabbitr#setTimer', function() {
       rabbit._cachedChannel.deleteQueue(queueName);
 
       // give rabbit time enough to perform cleanup
-      setTimeout(done, 500);
-    });
-
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+      setTimeout(done, 50);
     });
 
     var start = new Date().getTime();
-
-    var kDelayMS = 2500;
 
     var testData = {
       testProp: 'timed-example-data-' + queueName
@@ -36,19 +35,19 @@ describe('rabbitr#setTimer', function() {
     rabbit.on(queueName, function(message) {
       message.ack();
 
-      // here we'll assert that the data is the same, plus that the time of delivery is at least kDelayMS give or take kAcceptableTimerThreshold
+      // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
       var delay = Math.abs(new Date().getTime() - start);
-      expect(delay).to.be.above(kDelayMS - kAcceptableTimerThreshold);
+      expect(delay).to.be.above(DELAY - kAcceptableTimerThreshold);
       expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
 
       done();
     });
 
-    rabbit.setTimer(queueName, 'unique_id_tester_1', testData, kDelayMS);
+    rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY);
   });
 
   it('should not receive a message if #clearTimer is called', function(done) {
-    this.timeout(10000);
+    const DELAY = 50;
 
     var queueName = uuid.v4() + '.clear_timer_test';
 
@@ -58,16 +57,10 @@ describe('rabbitr#setTimer', function() {
       rabbit._cachedChannel.deleteQueue(queueName);
 
       // give rabbit time enough to perform cleanup
-      setTimeout(done, 500);
-    });
-
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+      setTimeout(done, 50);
     });
 
     var start = new Date().getTime();
-
-    var kDelayMS = 1500;
 
     var testData = {
       testProp: 'timed-example-data-' + queueName
@@ -85,16 +78,16 @@ describe('rabbitr#setTimer', function() {
     });
 
     // set the timer and schedule the clear
-    rabbit.setTimer(queueName, 'unique_clearing_test_id', testData, kDelayMS);
+    rabbit.setTimer(queueName, 'unique_clearing_test_id', testData, DELAY);
     setTimeout(function() {
       rabbit.clearTimer(queueName, 'unique_clearing_test_id');
-    }, kDelayMS - 1000);
+    }, DELAY / 2);
 
     // also set a timeout to fire after the message should have already have been delivered to check it wasn't
     setTimeout(function() {
       expect(receivedMessages).to.equal(0);
 
       done();
-    }, kDelayMS + 1000);
+    }, DELAY);
   });
 });
