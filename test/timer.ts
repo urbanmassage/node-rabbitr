@@ -5,6 +5,11 @@ var Rabbitr = require('../');
 var kAcceptableTimerThreshold = 500;
 
 describe('rabbitr#setTimer', function() {
+  const rabbit = new Rabbitr({
+    url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+  });
+  before((done) => rabbit.whenReady(done));
+
   it('should receive a message after a set number of milliseconds', function(done) {
     this.timeout(10000);
 
@@ -17,10 +22,6 @@ describe('rabbitr#setTimer', function() {
 
       // give rabbit time enough to perform cleanup
       setTimeout(done, 500);
-    });
-
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
 
     var start = new Date().getTime();
@@ -59,10 +60,6 @@ describe('rabbitr#setTimer', function() {
 
       // give rabbit time enough to perform cleanup
       setTimeout(done, 500);
-    });
-
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
 
     var start = new Date().getTime();

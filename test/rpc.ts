@@ -3,9 +3,12 @@ import {expect} from 'chai';
 var uuid = require('uuid');
 
 describe('rabbitr#rpc', function() {
-  it('should receive messages on rpcListener', function(done) {
-    this.timeout(5000);
+  const rabbit = new Rabbitr({
+    url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+  });
+  before((done) => rabbit.whenReady(done));
 
+  it('should receive messages on rpcListener', function(done) {
     var queueName = uuid.v4() + '.rpc_test';
 
     after(function(done) {
@@ -16,10 +19,6 @@ describe('rabbitr#rpc', function() {
 
       // give rabbit time enough to perform cleanup
       setTimeout(done, 500);
-    });
-
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
 
     var testData = {
@@ -52,10 +51,6 @@ describe('rabbitr#rpc', function() {
 
     var error = new Error('Test');
 
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
-    });
-
     rabbit.rpcListener(queueName, function(message, cb) {
       message.queue.shift();
       cb(error);
@@ -80,10 +75,6 @@ describe('rabbitr#rpc', function() {
 
     var error = {a: 'b', c: 'd', name: 'Error'};
 
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
-    });
-
     rabbit.rpcListener(queueName, function(message, cb) {
       message.queue.shift();
 
@@ -94,6 +85,28 @@ describe('rabbitr#rpc', function() {
       expect(err).to.deep.equal(error);
 
       expect(err).not.to.be.an.instanceOf(Error);
+
+      done();
+    });
+  });
+
+  it('passes Buffers', function(done) {
+    var queueName = uuid.v4() + '.rpc_test';
+
+    const data = 'Hello world!';
+
+    rabbit.rpcListener(queueName, function(message, cb) {
+      message.queue.shift();
+      expect(message.data).to.be.an.instanceOf(Buffer);
+      expect(message.data.toString()).to.equal(data);
+      cb(null, new Buffer(data));
+    });
+
+    rabbit.rpcExec(queueName, new Buffer(data), function(err, message) {
+      expect(err).to.not.exist;
+
+      expect(message).to.be.an.instanceOf(Buffer);
+      expect(message.toString()).to.equal(data);
 
       done();
     });
