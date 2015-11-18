@@ -11,20 +11,16 @@ const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
 function noop() { return void 0; };
 
+if (parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) < 0.4) {
+  // Monkey-patch :(
+  // https://github.com/nodejs/node-v0.x-archive/issues/5110
+  Buffer.prototype.toJSON = function () {
+    return {type: 'Buffer', data: Array.prototype.slice.call(this, 0)};
+  }
+}
+
 function stringify(obj: any) {
-  return JSON.stringify(obj, function(key: string, value: any) {
-    if (value instanceof Buffer) {
-      value = value.toJSON();
-      if (Array.isArray(value)) {
-        // NODE <= 0.12
-        value = {
-          type: 'Buffer',
-          data: value,
-        };
-      }
-    }
-    return value;
-  });
+  return JSON.stringify(obj);
 }
 
 function parse(json: string) {
