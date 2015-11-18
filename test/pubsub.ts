@@ -9,8 +9,6 @@ describe('rabbitr#pubsub', function() {
   before((done) => rabbit.whenReady(done));
 
   it('should receive messages on the specified queue', function(done) {
-    this.timeout(5000);
-
     var queueName = uuid.v4() + '.pubsub_test';
 
     after(function(done) {
@@ -19,7 +17,7 @@ describe('rabbitr#pubsub', function() {
       rabbit._cachedChannel.deleteQueue(queueName);
 
       // give rabbit time enough to perform cleanup
-      setTimeout(done, 500);
+      setTimeout(done, 50);
     });
 
     var testData = {
@@ -37,8 +35,7 @@ describe('rabbitr#pubsub', function() {
       done();
     });
 
-    setTimeout(function() {
-      rabbit.send(queueName, testData);
-    }, 1000);
+    // TODO - figure out why sync call doesn't work.
+    setTimeout(() => rabbit.send(queueName, testData), 10);
   });
 });
