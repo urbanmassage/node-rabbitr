@@ -3,6 +3,11 @@ import {expect} from 'chai';
 var uuid = require('uuid');
 
 describe('rabbitr#rpc', function() {
+  const rabbit = new Rabbitr({
+    url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+  });
+  before((done) => rabbit.whenReady(done));
+
   it('should receive messages on rpcListener', function(done) {
     this.timeout(5000);
 
@@ -16,10 +21,6 @@ describe('rabbitr#rpc', function() {
 
       // give rabbit time enough to perform cleanup
       setTimeout(done, 500);
-    });
-
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
 
     var testData = {
@@ -52,10 +53,6 @@ describe('rabbitr#rpc', function() {
 
     var error = new Error('Test');
 
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
-    });
-
     rabbit.rpcListener(queueName, function(message, cb) {
       message.queue.shift();
       cb(error);
@@ -79,10 +76,6 @@ describe('rabbitr#rpc', function() {
     var queueName = uuid.v4() + '.rpc_test';
 
     var error = {a: 'b', c: 'd', name: 'Error'};
-
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
-    });
 
     rabbit.rpcListener(queueName, function(message, cb) {
       message.queue.shift();
