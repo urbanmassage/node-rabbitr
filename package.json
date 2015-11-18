@@ -18,11 +18,10 @@
   "author": "Giles Williams",
   "license": "ISC",
   "dependencies": {
-    "amqplib": "^0.3.2",
+    "amqplib": "^0.4.0",
     "async": "^1.4.2",
     "chalk": "^1.1.1",
-    "debug": "^1.0.4",
-    "lock": "^0.1.2",
+    "debug": "^2.2.0",
     "shortid": "^2.0.1"
   },
   "devDependencies": {
@@ -36,7 +35,5 @@
     "typescript": "^1.6.2",
     "uuid": "^2.0.1"
   },
-  "typescript": {
-    "definition": "index.d.ts"
-  }
+  "typings": "index.d.ts"
 }

@@ -53,12 +53,12 @@ class Rabbitr extends EventEmitter {
   subscribeQueue: {
     topic: string,
     opts?: Rabbitr.ISubscribeOptions,
-    cb: ErrorCallback,
+    cb: Rabbitr.ErrorCallback,
   }[] = [];
   bindingsQueue: {
     exchange: string,
     queue: string,
-    cb: ErrorCallback,
+    cb: Rabbitr.ErrorCallback,
   }[] = [];
   sendQueue = [];
   setTimerQueue = [];
@@ -211,7 +211,7 @@ class Rabbitr extends EventEmitter {
     this.rpcExecQueue = [];
 
     while (this.readyQueue.length) {
-      this.readyQueue.shift()(); 
+      this.readyQueue.shift()();
     }
   }
 
@@ -367,7 +367,7 @@ class Rabbitr extends EventEmitter {
       });
     });
   }
-  bindExchangeToQueue(exchange: string, queue: string, cb?: ErrorCallback) {
+  bindExchangeToQueue(exchange: string, queue: string, cb?: Rabbitr.ErrorCallback) {
     if (!this.ready) {
       debug('adding item to bindings queue');
       this.bindingsQueue.push({
@@ -450,7 +450,7 @@ class Rabbitr extends EventEmitter {
       });
     });
   }
-  clearTimer(topic: string, uniqueID, cb: ErrorCallback) {
+  clearTimer(topic: string, uniqueID, cb: Rabbitr.ErrorCallback) {
     if (!this.ready) {
       debug('adding item to clearTimer queue');
       this.clearTimerQueue.push({
@@ -685,10 +685,10 @@ class Rabbitr extends EventEmitter {
   }
 
   // message middleware support
-  use(middlewareFunc: ErrorCallback) {
+  use(middlewareFunc: Rabbitr.ErrorCallback) {
     this.middleware.push(middlewareFunc);
   }
-  private _runMiddleware(message, next: ErrorCallback) {
+  private _runMiddleware(message, next: Rabbitr.ErrorCallback) {
     if (this.middleware.length === 0) return next();
     async.eachSeries(this.middleware, (middlewareFunc, next) => {
       middlewareFunc(message, next);
@@ -700,7 +700,7 @@ module Rabbitr {
   export interface IOptions {
     url: string;
     queuePrefix?: string;
-    setup?: (done: ErrorCallback) => void;
+    setup?: (done: Rabbitr.ErrorCallback) => void;
     connectionOpts?: {
       heartbeat?: boolean;
     };
