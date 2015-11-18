@@ -107,7 +107,21 @@ describe('rabbitr#rpc', function() {
 
       expect(message).to.be.an.instanceOf(Buffer);
       expect(message.toString()).to.equal(data);
+      done();
+    });
+  });
 
+  it('timeouts', function(done) {
+    const queueName = uuid.v4() + '.rpc_test';
+
+    rabbit.rpcListener(queueName, function(message, cb) {
+      message.queue.shift();
+      // No reply...
+    });
+
+    rabbit.rpcExec(queueName, {}, {timeout: 10}, (err: Error, message?) => {
+      expect(err).to.be.an.instanceOf(Error);
+      expect(err).to.have.property('name').that.equals('TimeoutError');
       done();
     });
   });

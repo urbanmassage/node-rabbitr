@@ -37,6 +37,7 @@ function hasProp(obj: Object, prop: string): boolean {
 
 class TimeoutError extends Error {
   topic: string;
+  name = 'TimeoutError';
   constructor(details: { topic?: string } = {}) {
     super('Request timed out');
     this.topic = details.topic;
