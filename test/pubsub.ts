@@ -9,23 +9,27 @@ describe('rabbitr#pubsub', function() {
   before((done) => rabbit.whenReady(done));
 
   it('should receive messages on the specified queue', function(done) {
-    var queueName = uuid.v4() + '.pubsub_test';
+    const exchangeName = uuid.v4() + '.pubsub_test';
+    const queueName = uuid.v4() + '.pubsub_test';
 
     after(function(done) {
       // cleanup
-      rabbit._cachedChannel.deleteExchange(queueName);
+      rabbit._cachedChannel.deleteExchange(exchangeName);
       rabbit._cachedChannel.deleteQueue(queueName);
 
       // give rabbit time enough to perform cleanup
-      setTimeout(done, 500);
+      setTimeout(done, 50);
     });
 
-    var testData = {
+    const testData = {
       testProp: 'pubsub-example-data-' + queueName
     };
 
     rabbit.subscribe(queueName);
-    rabbit.bindExchangeToQueue(queueName, queueName);
+    rabbit.bindExchangeToQueue(exchangeName, queueName, () =>
+      rabbit.send(exchangeName, testData)
+    );
+
     rabbit.on(queueName, function(message) {
       message.ack();
 
@@ -34,17 +38,28 @@ describe('rabbitr#pubsub', function() {
 
       done();
     });
-
-    setTimeout(() => rabbit.send(queueName, testData), 200);
   });
 
   it('passes Buffers', function(done) {
-    const queueName = uuid.v4() + '.pubsub_test';
+    const exchangeName = uuid.v4() + '.pubsub_buf_test';
+    const queueName = uuid.v4() + '.pubsub_buf_test';
+
+    after(function(done) {
+      // cleanup
+      rabbit._cachedChannel.deleteExchange(exchangeName);
+      rabbit._cachedChannel.deleteQueue(queueName);
+
+      // give rabbit time enough to perform cleanup
+      setTimeout(done, 50);
+    });
 
     const data = 'Hello world!';
 
     rabbit.subscribe(queueName);
-    rabbit.bindExchangeToQueue(queueName, queueName);
+    rabbit.bindExchangeToQueue(exchangeName, queueName, () => 
+      rabbit.send(exchangeName, new Buffer(data))
+    );
+
     rabbit.on(queueName, function(message, cb) {
       message.ack();
 
@@ -53,7 +68,5 @@ describe('rabbitr#pubsub', function() {
 
       done();
     });
-
-    setTimeout(() => rabbit.send(queueName, new Buffer(data)), 200);
   });
 });
