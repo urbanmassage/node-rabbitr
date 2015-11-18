@@ -3,9 +3,12 @@ import {expect} from 'chai';
 var uuid = require('uuid');
 
 describe('rabbitr#pubsub', function() {
-  it('should receive messages on the specified queue', function(done) {
-    this.timeout(5000);
+  let rabbit;
+  before(() => rabbit = new Rabbitr({
+    url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+  }));
 
+  it('should receive messages on the specified queue', function(done) {
     var queueName = uuid.v4() + '.pubsub_test';
 
     after(function(done) {
@@ -15,10 +18,6 @@ describe('rabbitr#pubsub', function() {
 
       // give rabbit time enough to perform cleanup
       setTimeout(done, 500);
-    });
-
-    var rabbit = new Rabbitr({
-      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
 
     var testData = {
@@ -36,8 +35,25 @@ describe('rabbitr#pubsub', function() {
       done();
     });
 
-    setTimeout(function() {
-      rabbit.send(queueName, testData);
-    }, 1000);
+    setTimeout(() => rabbit.send(queueName, testData), 200);
+  });
+
+  it('passes Buffers', function(done) {
+    const queueName = uuid.v4() + '.pubsub_test';
+
+    const data = 'Hello world!';
+
+    rabbit.subscribe(queueName);
+    rabbit.bindExchangeToQueue(queueName, queueName);
+    rabbit.on(queueName, function(message, cb) {
+      message.ack();
+
+      expect(message.data).to.be.an.instanceOf(Buffer);
+      expect(message.data.toString()).to.equal(data);
+
+      done();
+    });
+
+    setTimeout(() => rabbit.send(queueName, new Buffer(data)), 200);
   });
 });
