@@ -6,16 +6,15 @@ machine:
   environment:
     NODE_ENV: testing
 
-test:
-  override:
-    - npm test
-  post:
-    - MOCHA_FILE=$CIRCLE_TEST_REPORTS/test-results.xml npm run-script coverage -- -- "--reporter" "mocha-junit-reporter"
-    - cat ./coverage/coverage.json | ./node_modules/codecov.io/bin/codecov.io.js
-
 dependencies:
   cache_directories:
     - "node_modules"
   override:
     - npm install
     - npm prune
+
+test:
+  override:
+    - npm test
+    - MOCHA_FILE=$CIRCLE_TEST_REPORTS/test-results.xml npm run coverage -- "--reporter" "mocha-junit-reporter"
+    - cat ./coverage/lcov-mapped.info | ./node_modules/codecov.io/bin/codecov.io.js
