@@ -9,11 +9,12 @@ describe('rabbitr#pubsub', function() {
   before((done) => rabbit.whenReady(done));
 
   it('should receive messages on the specified queue', function(done) {
+    var exchangeName = uuid.v4() + '.pubsub_test';
     var queueName = uuid.v4() + '.pubsub_test';
 
     after(function(done) {
       // cleanup
-      rabbit._cachedChannel.deleteExchange(queueName);
+      rabbit._cachedChannel.deleteExchange(exchangeName);
       rabbit._cachedChannel.deleteQueue(queueName);
 
       // give rabbit time enough to perform cleanup
@@ -25,7 +26,10 @@ describe('rabbitr#pubsub', function() {
     };
 
     rabbit.subscribe(queueName);
-    rabbit.bindExchangeToQueue(queueName, queueName);
+    rabbit.bindExchangeToQueue(exchangeName, queueName, () =>
+      rabbit.send(exchangeName, testData)
+    );
+
     rabbit.on(queueName, function(message) {
       message.ack();
 
@@ -34,8 +38,5 @@ describe('rabbitr#pubsub', function() {
 
       done();
     });
-
-    // TODO - figure out why sync call doesn't work.
-    setTimeout(() => rabbit.send(queueName, testData), 10);
   });
 });
