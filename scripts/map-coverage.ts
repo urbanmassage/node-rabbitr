@@ -1,4 +1,4 @@
-var lcovSourcemap = require('lcov-sourcemap');
+const lcovSourcemap = require('lcov-sourcemap');
 
 lcovSourcemap.writeLcov('./coverage/lcov.info', {
   index: './index.js.map',
