@@ -477,11 +477,13 @@ class Rabbitr extends EventEmitter {
   }
   rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): void;
   rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): void;
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): void;
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): void;
 
-  rpcExec(topic: string, data: any, opts, cb?) {
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>) {
     if ('function' === typeof opts) {
       // shift arguments
-      cb = <Rabbitr.Callback<any>>opts;
+      cb = <Rabbitr.Callback<TOutput>>opts;
       opts = <Rabbitr.IRpcExecOptions>{};
     }
 
@@ -498,15 +500,15 @@ class Rabbitr extends EventEmitter {
     }
 
     // this will send the data down the topic and then open up a unique return queue
-    var rpcQueue = this._rpcQueueName(topic);
+    const rpcQueue = this._rpcQueueName(topic);
 
-    var unique = shortId.generate() + '_' + ((Math.round(new Date().getTime() / 1000) + '').substr(5));
-    var returnQueueName = rpcQueue + '.return.' + unique;
+    const unique = shortId.generate() + '_' + ((Math.round(new Date().getTime() / 1000) + '').substr(5));
+    const returnQueueName = rpcQueue + '.return.' + unique;
 
-    var now = new Date().getTime();
+    const now = new Date().getTime();
 
     // bind the response queue
-    var processed = false;
+    let processed = false;
 
     this.connection.createChannel((err, channel) => {
       if (err) {
@@ -534,7 +536,7 @@ class Rabbitr extends EventEmitter {
 
       // set a timeout
       const timeoutMS = (opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
-      var timeout = setTimeout(function() {
+      let timeout = setTimeout(function() {
         debug('request timeout firing for', rpcQueue, 'to', returnQueueName);
 
         cb(new TimeoutError({ topic: rpcQueue }));
@@ -545,7 +547,7 @@ class Rabbitr extends EventEmitter {
       const processMessage = function processMessage(msg) {
         if (!msg) return;
 
-        var data = msg.content.toString();
+        let data = msg.content.toString();
         if (msg.properties.contentType === 'application/json') {
           data = parse(data);
         }
@@ -558,8 +560,8 @@ class Rabbitr extends EventEmitter {
 
         clearTimeout(timeout);
 
-        var error = data.error;
-        var response = data.response;
+        let error = data.error;
+        const response: TOutput = data.response;
 
         if (error) {
           error = JSON.parse(error);
@@ -602,8 +604,11 @@ class Rabbitr extends EventEmitter {
     });
   }
 
-  // rpcListener(topic: string, executor: Function): void;
-  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor?: Rabbitr.IRpcListenerExecutor<any, any>): void;
+  rpcListener(topic: string, executor: Rabbitr.IRpcListenerExecutor<any, any>): void;
+  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>): void;
+  rpcListener<TInput, TOutput>(topic: string, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void;
+  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void;
+
   rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void {
     if ('function' === typeof opts) {
       // shift arguments
@@ -731,7 +736,7 @@ module Rabbitr {
     middleware?: Function[];
   }
   export interface IRpcListenerExecutor<TInput, TOutput> {
-    (message: IMessage<TInput>, respond: (err: Error, response?: TOutput) => void): void;
+    (message: IMessage<TInput>, respond: (err: any, response?: TOutput) => void): void;
   }
   export interface ISubscribeOptions {
     prefetch?: number;
@@ -745,6 +750,10 @@ module Rabbitr {
     reject(): void;
 
     data: TData;
+
+    queue: {
+      shift: () => void;
+    };
   }
 }
 
