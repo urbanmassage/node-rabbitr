@@ -14,6 +14,6 @@
     "quotemark": [true, "single"],
     "radix": true,
     "trailing-comma": [true, "multiline"],
-    "triple-equals": true
+    "triple-equals": [true, "allow-null-check"]
   }
 }

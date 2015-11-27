@@ -19,11 +19,11 @@ if (parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) < 0.4) {
   }
 }
 
-function stringify(obj: any) {
+function stringify(obj: any): string {
   return JSON.stringify(obj);
 }
 
-function parse(json: string) {
+function parse(json: string): any {
   return JSON.parse(json, function(key, value) {
     return value && value.type === 'Buffer'
       ? new Buffer(value.data)
@@ -322,12 +322,12 @@ class Rabbitr extends EventEmitter {
             }
           }, this.opts.ackWarningTimeout);
 
-          var message = {
-            topic: topic,
+          const message: Rabbitr.IMessage<TMessage> = {
             send: this.send.bind(this),
             rpcExec: this.rpcExec.bind(this),
-            data: data,
-            channel: channel,
+            topic,
+            data,
+            channel,
             ack() {
               debug('acknowledging message', topic, data);
 
@@ -348,8 +348,7 @@ class Rabbitr extends EventEmitter {
             }
           };
 
-          var skipMiddleware = options ? options.skipMiddleware || false : false;
-
+          const skipMiddleware = options && options.skipMiddleware || false;
           if (skipMiddleware) {
             return this.emit(topic, message);
           }
@@ -415,11 +414,11 @@ class Rabbitr extends EventEmitter {
     if (!this.ready) {
       debug('adding item to setTimer queue');
       this.setTimerQueue.push({
-        topic: topic,
-        uniqueID: uniqueID,
-        data: data,
-        ttl: ttl,
-        cb: cb
+        topic,
+        uniqueID,
+        data,
+        ttl,
+        cb,
       });
 
       return;
@@ -459,7 +458,7 @@ class Rabbitr extends EventEmitter {
     if (!this.ready) {
       debug('adding item to clearTimer queue');
       this.clearTimerQueue.push({
-        topic: topic,
+        topic,
         uniqueID: uniqueID,
         cb: cb
       });
@@ -624,7 +623,7 @@ class Rabbitr extends EventEmitter {
     if (!this.ready) {
       debug('adding item to rpcListener queue');
       this.rpcListenerQueue.push({
-        topic: topic,
+        topic,
         executor: executor,
         opts: opts
       });
@@ -638,16 +637,18 @@ class Rabbitr extends EventEmitter {
 
     debug('has rpcListener for', topic);
 
-    this.on(rpcQueue, (message) => {
-      const dataEnvelope = message.data;
-      message.data = dataEnvelope.d;
+    this.on(rpcQueue, (envelope: Rabbitr.IEnvelopedMessage<TInput>) => {
+      const dataEnvelope = envelope.data;
 
       const now = new Date().getTime();
 
       if (now > dataEnvelope.expiration) {
-        message.ack();
+        envelope.ack();
         return;
       }
+
+      const message: Rabbitr.IMessage<TInput> = <Rabbitr.IEnvelopedMessage<TInput> & Rabbitr.IMessage<TInput>>envelope;
+      message.data = dataEnvelope.d;
 
       // support for older clients - is this needed?
       message.queue = {
@@ -754,10 +755,24 @@ module Rabbitr {
     ack(): void;
     reject(): void;
 
+    topic: string;
+    channel: amqplib.Channel;
     data: TData;
 
-    queue: {
+    // TODO - type decorations...
+    send(): void;
+    rpcExec(): void;
+
+    queue?: {
       shift: () => void;
+    };
+  }
+
+  export interface IEnvelopedMessage<TData> extends IMessage<any> {
+    data: {
+      d: TData,
+      expiration: number,
+      returnQueue: string,
     };
   }
 }
