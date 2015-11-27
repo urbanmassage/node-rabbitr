@@ -4,5 +4,5 @@ coverage/
 **.js
 **.map
 **.log
-**.d.ts
-!typings/**.d.ts
+*.d.ts
+!typings/**/*.d.ts
