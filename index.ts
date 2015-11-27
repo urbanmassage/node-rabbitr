@@ -603,11 +603,12 @@ class Rabbitr extends EventEmitter {
   }
 
   // rpcListener(topic: string, executor: Function): void;
-  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions, executor?: Function): void {
+  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor?: Rabbitr.IRpcListenerExecutor<any, any>): void;
+  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void {
     if ('function' === typeof opts) {
       // shift arguments
-      executor = <Function>opts;
-      opts = <Rabbitr.IRpcListenerOptions>{};
+      executor = <Rabbitr.IRpcListenerExecutor<TInput, TOutput>>opts;
+      opts = <Rabbitr.IRpcListenerOptions<TInput, TOutput>>{};
     }
 
     if (!this.ready) {
@@ -628,10 +629,10 @@ class Rabbitr extends EventEmitter {
     debug('has rpcListener for', topic);
 
     this.on(rpcQueue, (message) => {
-      var dataEnvelope = message.data;
+      const dataEnvelope = message.data;
       message.data = dataEnvelope.d;
 
-      var now = new Date().getTime();
+      const now = new Date().getTime();
 
       if (now > dataEnvelope.expiration) {
         message.ack();
@@ -645,7 +646,7 @@ class Rabbitr extends EventEmitter {
 
       this._runMiddleware(message, (middlewareErr) => {
         // TODO - how to handle common error function thing for middleware?
-        var _cb: Rabbitr.Callback<any> = (err?, response?): void => {
+        var _cb: Rabbitr.Callback<TOutput> = (err?, response?: TOutput): void => {
           if (err) {
             debug(chalk.cyan('rpcListener') + ' ' + chalk.red('hit error'), err);
           }
@@ -726,14 +727,24 @@ module Rabbitr {
   export interface IRpcExecOptions {
     timeout?: number;
   }
-  export interface IRpcListenerOptions {
+  export interface IRpcListenerOptions<TInput, TOutput> {
     middleware?: Function[];
+  }
+  export interface IRpcListenerExecutor<TInput, TOutput> {
+    (message: IMessage<TInput>, respond: (err: Error, response?: TOutput) => void): void;
   }
   export interface ISubscribeOptions {
     prefetch?: number;
     skipMiddleware?: boolean;
   }
   export interface ISendOptions {
+  }
+
+  export interface IMessage<TData> {
+    ack(): void;
+    reject(): void;
+
+    data: TData;
   }
 }
 
