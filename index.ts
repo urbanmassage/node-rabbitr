@@ -98,9 +98,9 @@ class Rabbitr extends EventEmitter {
     this._connect();
   }
 
-  private _timerChannel;
-  private _publishChannel;
-  _cachedChannel;
+  private _timerChannel: amqplib.Channel;
+  private _publishChannel: amqplib.Channel;
+  _cachedChannel: amqplib.Channel;
 
   private _connect() {
     debug('#connect');
