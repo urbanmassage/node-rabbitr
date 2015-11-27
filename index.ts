@@ -231,15 +231,17 @@ class Rabbitr extends EventEmitter {
   }
 
   // standard pub/sub stuff
-  send(topic: string, data: any, cb?: Function, opts?: Rabbitr.ISendOptions) {
+  send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
+  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void {
     if (!this.ready) {
       debug('adding item to send queue');
-      return this.sendQueue.push({
+      this.sendQueue.push({
         topic,
         data,
         cb,
         opts,
       });
+      return;
     }
 
     debug(chalk.yellow('send'), topic, data, opts);
@@ -252,11 +254,15 @@ class Rabbitr extends EventEmitter {
       if (cb) cb(null);
     });
   }
-  subscribe(topic: string, cb?: Rabbitr.ErrorCallback): void;
-  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): void;
-  subscribe(topic: string, opts?, cb?: Rabbitr.ErrorCallback): void {
+
+  subscribe(topic: string, cb?: Rabbitr.Callback<any>): void;
+  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): void;
+  subscribe<TMessage>(topic: string, cb?: Rabbitr.Callback<TMessage>): void;
+  subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb: Rabbitr.Callback<TMessage>): void;
+
+  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<TMessage>): void {
     if (!cb) {
-      cb = <Rabbitr.ErrorCallback>opts;
+      cb = <Rabbitr.Callback<TMessage>>opts;
       opts = null;
     }
 
@@ -267,7 +273,6 @@ class Rabbitr extends EventEmitter {
         opts,
         cb,
       });
-
       return;
     }
 
@@ -478,7 +483,7 @@ class Rabbitr extends EventEmitter {
   rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): void;
   rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): void;
   rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): void;
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): void;
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb: Rabbitr.Callback<TOutput>): void;
 
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>) {
     if ('function' === typeof opts) {
