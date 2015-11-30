@@ -431,7 +431,9 @@ class Rabbitr extends EventEmitter {
     this._timerChannel.assertQueue(this._formatName(timerQueue), {
       durable: true,
       deadLetterExchange: this._formatName(topic),
-      deadLetterRoutingKey: '*',
+      arguments: {
+        'x-dead-letter-routing-key': '*'
+      },
       expires: (ttl + 1000)
     }, (err) => {
       if (err) {
@@ -443,13 +445,9 @@ class Rabbitr extends EventEmitter {
       this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
         contentType: 'application/json',
         expiration: ttl
-      }, (err) => {
-        if (err) {
-          this.emit('error', err);
-          if (cb) cb(err);
-          return;
-        }
-
+      });
+      
+      process.nextTick(function() {
         if (cb) cb(null);
       });
     });
@@ -602,7 +600,7 @@ class Rabbitr extends EventEmitter {
         };
         this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(obj)), {
           contentType: 'application/json',
-          expiration: timeoutMS
+          expiration: timeoutMS+''
         });
       });
     });
