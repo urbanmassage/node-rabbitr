@@ -446,7 +446,7 @@ class Rabbitr extends EventEmitter {
         contentType: 'application/json',
         expiration: ttl
       });
-      
+
       process.nextTick(function() {
         if (cb) cb(null);
       });
@@ -726,11 +726,14 @@ module Rabbitr {
 
   export interface ErrorCallback {
     (err?: Error): void;
+    (err: Error): void;
   }
 
   export interface Callback<T> {
     (err?: Error): void;
     (err?: Error, data?: T): void;
+    (err: Error): void;
+    (err: Error, data: T): void;
   }
 
   export interface IRpcExecOptions {
@@ -740,7 +743,7 @@ module Rabbitr {
     middleware?: Function[];
   }
   export interface IRpcListenerExecutor<TInput, TOutput> {
-    (message: IMessage<TInput>, respond: (err: any, response?: TOutput) => void): void;
+    (message: IMessage<TInput>, respond: Callback<TOutput>): void;
   }
   export interface ISubscribeOptions {
     prefetch?: number;
