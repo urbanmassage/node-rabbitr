@@ -73,7 +73,7 @@ describe('rabbitr#rpc', function() {
   it('passes custom errors', function(done) {
     var queueName = uuid.v4() + '.rpc_test';
 
-    var error = {a: 'b', c: 'd', name: 'Error'};
+    var error = {a: 'b', c: 'd', name: 'Error', message: 'test'};
 
     rabbit.rpcListener(queueName, function(message, cb) {
       message.queue.shift();
