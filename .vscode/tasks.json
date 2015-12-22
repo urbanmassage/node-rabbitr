@@ -3,6 +3,7 @@
 	"command": "npm",
 	"isShellCommand": true,
 	"args": ["-s", "run"],
+	"showOutput": "silent",
 
 	"tasks": [
 		{
