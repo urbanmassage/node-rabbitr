@@ -232,7 +232,8 @@ class Rabbitr extends EventEmitter {
 
   // standard pub/sub stuff
   send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
-  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void {
+  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
+  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts ?: Rabbitr.ISendOptions): void {
     if (!this.ready) {
       debug('adding item to send queue');
       this.sendQueue.push({
@@ -706,7 +707,7 @@ class Rabbitr extends EventEmitter {
   }
 };
 
-module Rabbitr {
+declare module Rabbitr {
   export interface IOptions {
     url: string;
     queuePrefix?: string;
@@ -755,9 +756,12 @@ module Rabbitr {
     channel: amqplib.Channel;
     data: TData;
 
-    // TODO - type decorations...
-    send(): void;
-    rpcExec(): void;
+    send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
+    send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
+    rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): void;
+    rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): void;
+    rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): void;
+    rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb: Rabbitr.Callback<TOutput>): void;
 
     queue?: {
       shift: () => void;
