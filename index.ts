@@ -313,10 +313,10 @@ class Rabbitr extends EventEmitter {
               message: data
             });
 
-            if (this.opts.autoAckOnTimeout === Rabbitr.AckTimeoutOption.Acknowledge) {
+            if (this.opts.autoAckOnTimeout === 'acknowledge') {
               acked = true;
               channel.ack(msg);
-            } else if (this.opts.autoAckOnTimeout === Rabbitr.AckTimeoutOption.Reject) {
+            } else if (this.opts.autoAckOnTimeout === 'reject') {
               acked = true;
               channel.nack(msg);
             }
@@ -715,13 +715,8 @@ module Rabbitr {
       heartbeat?: boolean;
     };
     ackWarningTimeout?: number;
-    autoAckOnTimeout?: AckTimeoutOption;
+    autoAckOnTimeout?: string;
     defaultRPCExpiry?: number;
-  }
-
-  export enum AckTimeoutOption {
-    Acknowledge = <any>'acknowledge',
-    Reject = <any>'reject',
   }
 
   export interface ErrorCallback {
