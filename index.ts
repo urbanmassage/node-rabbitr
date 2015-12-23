@@ -14,8 +14,8 @@ function noop() { return void 0; };
 if (parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) < 0.4) {
   // Monkey-patch :(
   // https://github.com/nodejs/node-v0.x-archive/issues/5110
-  Buffer.prototype.toJSON = function () {
-    return {type: 'Buffer', data: Array.prototype.slice.call(this, 0)};
+  Buffer.prototype.toJSON = function() {
+    return { type: 'Buffer', data: Array.prototype.slice.call(this, 0) };
   }
 }
 
@@ -100,6 +100,7 @@ class Rabbitr extends EventEmitter {
 
   private _timerChannel: amqplib.Channel;
   private _publishChannel: amqplib.Channel;
+  private _rpcReturnChannel: amqplib.Channel;
   _cachedChannel: amqplib.Channel;
 
   private _connect() {
@@ -128,21 +129,29 @@ class Rabbitr extends EventEmitter {
         this._publishChannel = channel;
         this._cachedChannel = channel;
 
-        // cache the connection and do all the setup work
-        this.connection = conn;
-        this.connected = true;
+        conn.createChannel((err: Error, channel: amqplib.Channel): void => {
+          if (err) {
+            throw err;
+          }
 
-        if (this.doneSetup) {
-          this._afterSetup();
-        } else {
-          this.opts.setup((err) => {
-            if (err) throw err;
+          this._rpcReturnChannel = channel;
 
-            this.doneSetup = true;
+          // cache the connection and do all the setup work
+          this.connection = conn;
+          this.connected = true;
 
+          if (this.doneSetup) {
             this._afterSetup();
-          });
-        }
+          } else {
+            this.opts.setup((err) => {
+              if (err) throw err;
+
+              this.doneSetup = true;
+
+              this._afterSetup();
+            });
+          }
+        });
       });
     });
   }
@@ -233,7 +242,7 @@ class Rabbitr extends EventEmitter {
   // standard pub/sub stuff
   send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
   send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
-  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts ?: Rabbitr.ISendOptions): void {
+  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void {
     if (!this.ready) {
       debug('adding item to send queue');
       this.sendQueue.push({
@@ -513,96 +522,88 @@ class Rabbitr extends EventEmitter {
     // bind the response queue
     let processed = false;
 
-    this.connection.createChannel((err, channel) => {
+    const channel = this._rpcReturnChannel;
+
+    channel.assertQueue(this._formatName(returnQueueName), {
+      exclusive: true,
+      expires: (this.opts.defaultRPCExpiry * 1 + 1000)
+    });
+
+    debug('using rpc return queue "%s"', chalk.cyan(returnQueueName));
+    const cleanup = function cleanup() {
+      // delete the return queue and close exc channel
+      try {
+        channel.deleteQueue(this._formatName(returnQueueName), function() {});
+      } catch (e) {
+        console.log('rabbitr cleanup exception', e);
+      }
+    }.bind(this);
+
+    // set a timeout
+    const timeoutMS = (opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
+    let timeout = setTimeout(function() {
+      debug('request timeout firing for', rpcQueue, 'to', returnQueueName);
+
+      cb(new TimeoutError({ topic: rpcQueue }));
+
+      cleanup();
+    }, timeoutMS);
+
+    const processMessage = function processMessage(msg) {
+      if (!msg) return;
+
+      let data = msg.content.toString();
+      if (msg.properties.contentType === 'application/json') {
+        data = parse(data);
+      }
+
+      if (processed) {
+        cleanup();
+        return;
+      }
+      processed = true;
+
+      clearTimeout(timeout);
+
+      let error = data.error;
+      const response: TOutput = data.response;
+
+      if (error) {
+        error = JSON.parse(error);
+        if (data.isError) {
+          var err = new Error(error.message);
+          Object.keys(error).forEach(function(key) {
+            if (err[key] !== error[key]) {
+              err[key] = error[key];
+            }
+          });
+          error = err;
+        }
+      }
+
+      cb(error, response);
+
+      cleanup();
+    }.bind(this);
+
+    channel.consume(this._formatName(returnQueueName), processMessage, {
+      noAck: true
+    }, (err) => {
       if (err) {
         this.emit('error', err);
         if (cb) cb(err);
         return;
       }
 
-      channel.assertQueue(this._formatName(returnQueueName), {
-        exclusive: true,
-        expires: (this.opts.defaultRPCExpiry * 1 + 1000)
-      });
-
-      debug('using rpc return queue "%s"', chalk.cyan(returnQueueName));
-      const cleanup = function cleanup() {
-        // delete the return queue and close exc channel
-        try {
-          channel.deleteQueue(this._formatName(returnQueueName), function() {
-            channel.close(noop);
-          });
-        } catch (e) {
-          console.log('rabbitr cleanup exception', e);
-        }
-      }.bind(this);
-
-      // set a timeout
-      const timeoutMS = (opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
-      let timeout = setTimeout(function() {
-        debug('request timeout firing for', rpcQueue, 'to', returnQueueName);
-
-        cb(new TimeoutError({ topic: rpcQueue }));
-
-        cleanup();
-      }, timeoutMS);
-
-      const processMessage = function processMessage(msg) {
-        if (!msg) return;
-
-        let data = msg.content.toString();
-        if (msg.properties.contentType === 'application/json') {
-          data = parse(data);
-        }
-
-        if (processed) {
-          cleanup();
-          return;
-        }
-        processed = true;
-
-        clearTimeout(timeout);
-
-        let error = data.error;
-        const response: TOutput = data.response;
-
-        if (error) {
-          error = JSON.parse(error);
-          if (data.isError) {
-            var err = new Error(error.message);
-            Object.keys(error).forEach(function(key) {
-              if (err[key] !== error[key]) {
-                err[key] = error[key];
-              }
-            });
-            error = err;
-          }
-        }
-
-        cb(error, response);
-
-        cleanup();
-      }.bind(this);
-
-      channel.consume(this._formatName(returnQueueName), processMessage, {
-        noAck: true
-      }, (err) => {
-        if (err) {
-          this.emit('error', err);
-          if (cb) cb(err);
-          return;
-        }
-
-        // send the request now
-        const obj = {
-          d: data,
-          returnQueue: this._formatName(returnQueueName),
-          expiration: now + timeoutMS
-        };
-        this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(obj)), {
-          contentType: 'application/json',
-          expiration: timeoutMS+''
-        });
+      // send the request now
+      const obj = {
+        d: data,
+        returnQueue: this._formatName(returnQueueName),
+        expiration: now + timeoutMS
+      };
+      this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(obj)), {
+        contentType: 'application/json',
+        expiration: timeoutMS + ''
       });
     });
   }
@@ -666,8 +667,8 @@ class Rabbitr extends EventEmitter {
 
           var isError = err instanceof Error;
           var errJSON = isError ?
-              JSON.stringify(err, Object.keys(err).concat(['name', 'type', 'arguments', 'stack', 'message'])) :
-              JSON.stringify(err);
+            JSON.stringify(err, Object.keys(err).concat(['name', 'type', 'arguments', 'stack', 'message'])) :
+            JSON.stringify(err);
 
           // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
           this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify({
@@ -675,8 +676,8 @@ class Rabbitr extends EventEmitter {
             isError: isError,
             response: response,
           })), {
-            contentType: 'application/json'
-          });
+              contentType: 'application/json'
+            });
         };
 
         function _runExecutor() {
