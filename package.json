@@ -11,10 +11,6 @@
     "coverage": "istanbul cover _mocha --",
     "postcoverage": "node scripts/map-coverage.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/gileze33/node-rabbitr"
-  },
   "author": "Giles Williams",
   "license": "ISC",
   "dependencies": {
@@ -35,5 +31,27 @@
     "typescript": "^1.7.5",
     "uuid": "^2.0.1"
   },
-  "typings": "index.d.ts"
+  "typings": "index.d.ts",
+  "directories": {
+    "example": "examples",
+    "test": "test"
+  },
+  "keywords": [
+    "rabbitmq",
+    "messages",
+    "queues",
+    "amqp",
+    "event",
+    "subscribe",
+    "schedule",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/urbanmassage/node-rabbitr.git"
+  },
+  "bugs": {
+    "url": "https://github.com/urbanmassage/node-rabbitr/issues"
+  },
+  "homepage": "https://github.com/urbanmassage/node-rabbitr"
 }
