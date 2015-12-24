@@ -1,6 +1,6 @@
 {
   "name": "rabbitr",
-  "version": "7.8.1",
+  "version": "7.8.2",
   "description": "RabbitMQ made easy for nodejs",
   "main": "index",
   "scripts": {
