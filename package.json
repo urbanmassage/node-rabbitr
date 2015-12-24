@@ -22,6 +22,7 @@
     "async": "^1.4.2",
     "chalk": "^1.1.1",
     "debug": "^2.2.0",
+    "rabbitr": "^7.8.2",
     "shortid": "^2.0.1"
   },
   "devDependencies": {
