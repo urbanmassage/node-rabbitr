@@ -469,9 +469,15 @@ class Rabbitr extends EventEmitter {
 
     debug(chalk.yellow('clearTimer'), timerQueue);
 
+    try {
+      // For some reason we get an error thrown here.
+      // TODO - investigate
     this._timerChannel.deleteQueue(timerQueue, {}, (err: Error) => {
       if (cb) cb(err);
     });
+    } catch (err) {
+      cb(err);
+    }
   }
 
   // rpc stuff
