@@ -1,6 +1,6 @@
 import Rabbitr = require('../');
 
-var rabbit = new Rabbitr({
+const rabbit = new Rabbitr({
   url: 'amqp://guest:guest@localhost',
   queuePrefix: 'yo'
 });
@@ -18,7 +18,7 @@ rabbit.rpcListener('example.rpc', function(message, cb) {
 
 rabbit.rpcExec('example.rpc', {
   thisIs: 'the-input'
-}, (err, response?) => {
+}, (err, response) => {
   console.log('Got RPC response', response.data);
 
   setTimeout(function() {

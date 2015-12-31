@@ -1,5 +1,5 @@
 import Rabbitr = require('../');
-var rabbit = new Rabbitr({
+const rabbit = new Rabbitr({
   url: 'amqp://guest:guest@localhost'
 });
 
@@ -16,11 +16,11 @@ rabbit.on('example.timer', function(message) {
   }, 100);
 });
 
-var kDelayMS = 15000;
+const DELAY_MS = 15000;
 
 rabbit.setTimer('example.timer', 'unique_id_tester', {
   thisIs: 'timed-example-data',
   delayed: true
-}, kDelayMS, function(err) {
+}, DELAY_MS, function(err) {
   console.log('Sent delayed message', err);
 });

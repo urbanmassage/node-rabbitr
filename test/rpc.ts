@@ -1,6 +1,6 @@
 import Rabbitr = require('../');
 import {expect} from 'chai';
-var uuid = require('uuid');
+const uuid = require('uuid');
 
 describe('rabbitr#rpc', function() {
   const rabbit = new Rabbitr({
@@ -9,7 +9,7 @@ describe('rabbitr#rpc', function() {
   before((done) => rabbit.whenReady(done));
 
   it('should receive messages on rpcListener', function(done) {
-    var queueName = uuid.v4() + '.rpc_test';
+    const queueName = uuid.v4() + '.rpc_test';
 
     after(function(done) {
       // cleanup
@@ -21,10 +21,10 @@ describe('rabbitr#rpc', function() {
       setTimeout(done, 500);
     });
 
-    var testData = {
+    const testData = {
       testProp: 'rpc-example-data-' + queueName
     };
-    var responseData = {
+    const responseData = {
       testing: 'return-'+queueName
     };
 
@@ -47,9 +47,9 @@ describe('rabbitr#rpc', function() {
   });
 
   it('passes errors back', function(done) {
-    var queueName = uuid.v4() + '.rpc_test';
+    const queueName = uuid.v4() + '.rpc_test';
 
-    var error = new Error('Test');
+    const error = new Error('Test');
 
     rabbit.rpcListener(queueName, function(message, cb) {
       message.queue.shift();
@@ -71,9 +71,9 @@ describe('rabbitr#rpc', function() {
   });
 
   it('passes custom errors', function(done) {
-    var queueName = uuid.v4() + '.rpc_test';
+    const queueName = uuid.v4() + '.rpc_test';
 
-    var error = {a: 'b', c: 'd', name: 'Error', message: 'test'};
+    const error = {a: 'b', c: 'd', name: 'Error', message: 'test'};
 
     rabbit.rpcListener(queueName, function(message, cb) {
       message.queue.shift();
@@ -91,7 +91,7 @@ describe('rabbitr#rpc', function() {
   });
 
   it('passes Buffers', function(done) {
-    var queueName = uuid.v4() + '.rpc_test';
+    const queueName = uuid.v4() + '.rpc_test';
 
     const data = 'Hello world!';
 

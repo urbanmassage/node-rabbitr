@@ -1,8 +1,8 @@
-var uuid = require('uuid');
-var expect = require('chai').expect;
-var Rabbitr = require('../');
+import {expect} from 'chai';
+import Rabbitr = require('../');
+const uuid = require('uuid');
 
-var kAcceptableTimerThreshold = 10;
+const ACCEPTABLE_TIMER_THRESHOLD = 10;
 
 describe('rabbitr#setTimer', function() {
   const rabbit = new Rabbitr({
@@ -13,7 +13,7 @@ describe('rabbitr#setTimer', function() {
   it('should receive a message after a set number of milliseconds', function(done) {
     const DELAY = 50;
 
-    var queueName = uuid.v4() + '.timer_test';
+    const queueName = uuid.v4() + '.timer_test';
 
     after(function(done) {
       // cleanup
@@ -24,9 +24,9 @@ describe('rabbitr#setTimer', function() {
       setTimeout(done, 50);
     });
 
-    var start = new Date().getTime();
+    const start = new Date().getTime();
 
-    var testData = {
+    const testData = {
       testProp: 'timed-example-data-' + queueName
     };
 
@@ -39,8 +39,8 @@ describe('rabbitr#setTimer', function() {
       message.ack();
 
       // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
-      var delay = Math.abs(new Date().getTime() - start);
-      expect(delay).to.be.above(DELAY - kAcceptableTimerThreshold);
+      const delay = Math.abs(new Date().getTime() - start);
+      expect(delay).to.be.above(DELAY - ACCEPTABLE_TIMER_THRESHOLD);
       expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
 
       done();
@@ -50,7 +50,7 @@ describe('rabbitr#setTimer', function() {
   it('should not receive a message if #clearTimer is called', function(done) {
     const DELAY = 50;
 
-    var queueName = uuid.v4() + '.clear_timer_test';
+    const queueName = uuid.v4() + '.clear_timer_test';
 
     after(function(done) {
       // cleanup
@@ -61,13 +61,11 @@ describe('rabbitr#setTimer', function() {
       setTimeout(done, 50);
     });
 
-    var start = new Date().getTime();
-
-    var testData = {
+    const testData = {
       testProp: 'timed-example-data-' + queueName
     };
 
-    var receivedMessages = 0;
+    let receivedMessages = 0;
 
     // listen for messages on the queue - nothing should be received here if this works!
     rabbit.subscribe(queueName);

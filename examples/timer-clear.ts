@@ -1,5 +1,5 @@
 import Rabbitr = require('../');
-var rabbit = new Rabbitr({
+const rabbit = new Rabbitr({
   url: 'amqp://guest:guest@localhost'
 });
 
@@ -15,12 +15,12 @@ rabbit.on('example.timer.to-clear', (message) => {
   }, 100);
 });
 
-var kDelayMS = 2000;
+const DELAY_MS = 2000;
 
 rabbit.setTimer('example.timer.to-clear', 'unique_id_tester', {
   thisIs: 'timed-example-data',
   delayed: true
-}, kDelayMS, (err: Error) => {
+}, DELAY_MS, (err: Error) => {
   console.log('Sent delayed message', err);
 });
 
@@ -34,4 +34,4 @@ setTimeout(() => {
 setTimeout(() => {
   console.log('Timer did not fire, awesome!');
   process.exit(0);
-}, kDelayMS + 1000);
+}, DELAY_MS + 1000);

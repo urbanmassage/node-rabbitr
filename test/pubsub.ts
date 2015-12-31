@@ -1,6 +1,6 @@
 import Rabbitr = require('../');
 import {expect} from 'chai';
-var uuid = require('uuid');
+const uuid = require('uuid');
 
 describe('rabbitr#pubsub', function() {
   const rabbit = new Rabbitr({
@@ -56,11 +56,11 @@ describe('rabbitr#pubsub', function() {
     const data = 'Hello world!';
 
     rabbit.subscribe(queueName);
-    rabbit.bindExchangeToQueue(exchangeName, queueName, () => 
+    rabbit.bindExchangeToQueue(exchangeName, queueName, () =>
       rabbit.send(exchangeName, new Buffer(data))
     );
 
-    rabbit.on(queueName, function(message, cb) {
+    rabbit.on(queueName, function(message) {
       message.ack();
 
       expect(message.data).to.be.an.instanceOf(Buffer);

@@ -47,16 +47,8 @@ class Rabbitr extends EventEmitter {
   protected ready = false;
   protected doneSetup = false;
   protected connected = false;
-  subscribeQueue: {
-    topic: string,
-    opts?: Rabbitr.ISubscribeOptions,
-    cb: Rabbitr.ErrorCallback,
-  }[] = [];
-  bindingsQueue: {
-    exchange: string,
-    queue: string,
-    cb: Rabbitr.ErrorCallback,
-  }[] = [];
+  subscribeQueue = new Array<{ topic: string, opts?: Rabbitr.ISubscribeOptions, cb: Rabbitr.Callback<any> }>();
+  bindingsQueue = new Array<{ exchange: string, queue: string, cb: Rabbitr.ErrorCallback }>();
   sendQueue = new Array<{ topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions }>();
   setTimerQueue = new Array<{ topic: string, uniqueID: string, data: any, ttl: number, cb?: Rabbitr.ErrorCallback }>();
   clearTimerQueue = new Array<{ topic: string, uniqueID: string, cb: Rabbitr.ErrorCallback }>();
@@ -216,6 +208,7 @@ class Rabbitr extends EventEmitter {
 
   private readyQueue: Function[] = [];
 
+  // istanbul ignore next
   public whenReady(callback: Function) {
     if (this.ready) return callback();
     this.readyQueue.push(callback);
@@ -235,6 +228,7 @@ class Rabbitr extends EventEmitter {
   send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
 
   send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void {
+    // istanbul ignore next
     if (!this.ready) {
       debug('adding item to send queue');
       this.sendQueue.push({
@@ -257,17 +251,24 @@ class Rabbitr extends EventEmitter {
     });
   }
 
+  on(topic: string, cb: (data: Rabbitr.IMessage<any>) => void): this;
+  on<TData>(topic: string, cb: (data: Rabbitr.IMessage<TData>) => void): this;
+
+  /** @private */
+  on(topic: string, cb: (data: Rabbitr.IEnvelopedMessage<any>) => void): this;
+
   subscribe(topic: string, cb?: Rabbitr.Callback<any>): void;
   subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): void;
   subscribe<TMessage>(topic: string, cb?: Rabbitr.Callback<TMessage>): void;
   subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb: Rabbitr.Callback<TMessage>): void;
 
-  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<TMessage>): void {
+  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): void {
     if (!cb) {
-      cb = <Rabbitr.Callback<TMessage>>opts;
+      cb = <any>opts;
       opts = null;
     }
 
+    // istanbul ignore next
     if (!this.ready) {
       debug('adding item to sub queue');
       this.subscribeQueue.push({
@@ -375,6 +376,7 @@ class Rabbitr extends EventEmitter {
   }
 
   bindExchangeToQueue(exchange: string, queue: string, cb?: Rabbitr.ErrorCallback) {
+    // istanbul ignore next
     if (!this.ready) {
       debug('adding item to bindings queue');
       this.bindingsQueue.push({
@@ -415,6 +417,7 @@ class Rabbitr extends EventEmitter {
   }
 
   setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback) {
+    // istanbul ignore next
     if (!this.ready) {
       debug('adding item to setTimer queue');
       this.setTimerQueue.push({
@@ -458,7 +461,8 @@ class Rabbitr extends EventEmitter {
     });
   }
 
-  clearTimer(topic: string, uniqueID: string, cb: Rabbitr.ErrorCallback) {
+  clearTimer(topic: string, uniqueID: string, cb?: Rabbitr.ErrorCallback) {
+    // istanbul ignore next
     if (!this.ready) {
       debug('adding item to clearTimer queue');
       this.clearTimerQueue.push({
@@ -489,18 +493,21 @@ class Rabbitr extends EventEmitter {
   private _rpcQueueName(topic: string): string {
     return 'rpc.' + topic;
   }
+
   rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): void;
   rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): void;
   rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): void;
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb: Rabbitr.Callback<TOutput>): void;
 
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>) {
+    // istanbul ignore next
     if ('function' === typeof opts) {
       // shift arguments
       cb = <Rabbitr.Callback<TOutput>>opts;
       opts = <Rabbitr.IRpcExecOptions>{};
     }
 
+    // istanbul ignore next
     if (!this.ready) {
       debug('adding item to rpcExec queue');
       this.rpcExecQueue.push({
@@ -546,7 +553,7 @@ class Rabbitr extends EventEmitter {
     let timeout = setTimeout(function() {
       debug('request timeout firing for', rpcQueue, 'to', returnQueueName);
 
-      cb(new TimeoutError({ topic: rpcQueue }));
+      cb(new TimeoutError({ topic: rpcQueue }), null);
 
       cleanup();
     }, timeoutMS);
@@ -593,7 +600,7 @@ class Rabbitr extends EventEmitter {
     }, (err) => {
       if (err) {
         this.emit('error', err);
-        if (cb) cb(err);
+        if (cb) cb(err, null);
         return;
       }
 
@@ -616,12 +623,14 @@ class Rabbitr extends EventEmitter {
   rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void;
 
   rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void {
+    // istanbul ignore next
     if ('function' === typeof opts) {
       // shift arguments
       executor = <Rabbitr.IRpcListenerExecutor<TInput, TOutput>>opts;
       opts = <Rabbitr.IRpcListenerOptions<TInput, TOutput>>{};
     }
 
+    // istanbul ignore next
     if (!this.ready) {
       debug('adding item to rpcListener queue');
       this.rpcListenerQueue.push({
@@ -703,7 +712,7 @@ class Rabbitr extends EventEmitter {
     this.middleware.push(middlewareFunc);
   }
   private _runMiddleware(message: Rabbitr.IMessage<any>, next: Rabbitr.ErrorCallback) {
-    if (this.middleware.length === 0) return next();
+    if (this.middleware.length === 0) return next(null);
     async.eachSeries(this.middleware, (middlewareFunc, next) => {
       middlewareFunc(message, next);
     }, next);
@@ -729,13 +738,10 @@ declare module Rabbitr {
   }
 
   export interface ErrorCallback {
-    (err?: Error): void;
     (err: Error): void;
   }
 
   export interface Callback<T> {
-    (err?: Error): void;
-    (err?: Error, data?: T): void;
     (err: Error): void;
     (err: Error, data: T): void;
   }
