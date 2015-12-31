@@ -73,6 +73,7 @@ class Rabbitr extends EventEmitter {
       heartbeat: 1
     }, opts && opts.connectionOpts || {});
 
+    // istanbul ignore next
     if (!this.opts.url) {
       throw new Error('Missing `url` in Rabbitr options');
     }
@@ -91,6 +92,7 @@ class Rabbitr extends EventEmitter {
     debug('using connection url', this.opts.url);
 
     amqplib.connect(this.opts.url, this.opts.connectionOpts, (err: Error, conn: amqplib.Connection): void => {
+      // istanbul ignore next
       if (err) {
         throw err;
       }
@@ -99,10 +101,12 @@ class Rabbitr extends EventEmitter {
       process.once('SIGINT', conn.close.bind(conn));
 
       conn.on('close', () => {
+        // istanbul ignore next
         throw new Error('Disconnected from RabbitMQ');
       });
 
       conn.createChannel((err: Error, channel: amqplib.Channel): void => {
+        // istanbul ignore next
         if (err) {
           throw err;
         }
@@ -112,6 +116,7 @@ class Rabbitr extends EventEmitter {
         this._cachedChannel = channel;
 
         conn.createChannel((err: Error, channel: amqplib.Channel): void => {
+          // istanbul ignore next
           if (err) {
             throw err;
           }
@@ -122,10 +127,12 @@ class Rabbitr extends EventEmitter {
           this.connection = conn;
           this.connected = true;
 
+          // istanbul ignore next
           if (this.doneSetup) {
             this._afterSetup();
           } else {
             this.opts.setup((err: Error) => {
+              // istanbul ignore next
               if (err) throw err;
 
               this.doneSetup = true;
@@ -143,6 +150,7 @@ class Rabbitr extends EventEmitter {
 
     debug('ready and has queue sizes', this.subscribeQueue.length, this.bindingsQueue.length, this.rpcListenerQueue.length, this.sendQueue.length, this.rpcExecQueue.length);
     for (var i = 0; i < this.subscribeQueue.length; i++) {
+      // istanbul ignore next
       this.subscribe(
         this.subscribeQueue[i].topic,
         this.subscribeQueue[i].opts,
@@ -151,6 +159,7 @@ class Rabbitr extends EventEmitter {
     }
     this.subscribeQueue = [];
     for (var i = 0; i < this.bindingsQueue.length; i++) {
+      // istanbul ignore next
       this.bindExchangeToQueue(
         this.bindingsQueue[i].exchange,
         this.bindingsQueue[i].queue,
@@ -159,6 +168,7 @@ class Rabbitr extends EventEmitter {
     }
     this.bindingsQueue = [];
     for (var i = 0; i < this.rpcListenerQueue.length; i++) {
+      // istanbul ignore next
       this.rpcListener(
         this.rpcListenerQueue[i].topic,
         this.rpcListenerQueue[i].opts,
@@ -169,6 +179,7 @@ class Rabbitr extends EventEmitter {
 
     // send anything in send queue but clear it after
     for (var i = 0; i < this.sendQueue.length; i++) {
+      // istanbul ignore next
       this.send(
         this.sendQueue[i].topic,
         this.sendQueue[i].data,
@@ -180,18 +191,21 @@ class Rabbitr extends EventEmitter {
 
     // send anything in setTimer queue but clear it after
     for (var i = 0; i < this.setTimerQueue.length; i++) {
+      // istanbul ignore next
       this.setTimer(this.setTimerQueue[i].topic, this.setTimerQueue[i].uniqueID, this.setTimerQueue[i].data, this.setTimerQueue[i].ttl, this.setTimerQueue[i].cb);
     }
     this.setTimerQueue = [];
 
     // send anything in clearTimer queue but clear it after
     for (var i = 0; i < this.clearTimerQueue.length; i++) {
+      // istanbul ignore next
       this.clearTimer(this.clearTimerQueue[i].topic, this.clearTimerQueue[i].uniqueID, this.clearTimerQueue[i].cb);
     }
     this.clearTimerQueue = [];
 
     // send anything in rpcExec queue but clear it after
     for (var i = 0; i < this.rpcExecQueue.length; i++) {
+      // istanbul ignore next
       this.rpcExec(
         this.rpcExecQueue[i].topic,
         this.rpcExecQueue[i].data,
@@ -202,6 +216,7 @@ class Rabbitr extends EventEmitter {
     this.rpcExecQueue = [];
 
     while (this.readyQueue.length) {
+      // istanbul ignore next
       this.readyQueue.shift()();
     }
   }
@@ -215,6 +230,7 @@ class Rabbitr extends EventEmitter {
   }
 
   private _formatName(name: string) {
+    // istanbul ignore next
     if (this.opts.queuePrefix) {
       name = this.opts.queuePrefix + '.' + name;
     }
@@ -263,6 +279,7 @@ class Rabbitr extends EventEmitter {
   subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb: Rabbitr.Callback<TMessage>): void;
 
   subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): void {
+    // istanbul ignore next
     if (!cb) {
       cb = <any>opts;
       opts = null;
@@ -284,6 +301,7 @@ class Rabbitr extends EventEmitter {
     debug(chalk.cyan('subscribe'), topic, options);
 
     this.connection.createChannel((err: Error, channel: amqplib.Channel): void => {
+      // istanbul ignore next
       if (err) {
         this.emit('error', err);
         if (cb) cb(err);
@@ -291,6 +309,7 @@ class Rabbitr extends EventEmitter {
       }
 
       channel.assertQueue(this._formatName(topic), {}, (err, ok) => {
+        // istanbul ignore next
         if (err) {
           return cb(err);
         }
@@ -363,6 +382,7 @@ class Rabbitr extends EventEmitter {
         }.bind(this);
 
         channel.consume(this._formatName(topic), processMessage, (err: Error/*, ok*/) => {
+          // istanbul ignore next
           if (err) {
             this.emit('error', err);
             if (cb) cb(err);
@@ -390,6 +410,7 @@ class Rabbitr extends EventEmitter {
     debug(chalk.cyan('bindExchangeToQueue'), exchange, queue);
 
     this.connection.createChannel((err, channel) => {
+      // istanbul ignore next
       if (err) {
         this.emit('error', err);
         if (cb) cb(err);
@@ -400,6 +421,7 @@ class Rabbitr extends EventEmitter {
       channel.assertExchange(this._formatName(exchange), 'topic');
 
       channel.bindQueue(this._formatName(queue), this._formatName(exchange), '*', {}, (err, ok) => {
+        // istanbul ignore next
         if (err) {
           this.emit('error', err);
           if (cb) cb(err);
@@ -443,6 +465,7 @@ class Rabbitr extends EventEmitter {
       },
       expires: (ttl + 1000)
     }, (err) => {
+      // istanbul ignore next
       if (err) {
         this.emit('error', err);
         if (cb) cb(err);
@@ -484,7 +507,8 @@ class Rabbitr extends EventEmitter {
       this._timerChannel.deleteQueue(timerQueue, {}, (err: Error) => {
         if (cb) cb(err);
       });
-    } catch (err) {
+    } // istanbul ignore next
+    catch (err) {
       cb(err);
     }
   }
@@ -543,7 +567,9 @@ class Rabbitr extends EventEmitter {
       // delete the return queue and close exc channel
       try {
         channel.deleteQueue(this._formatName(returnQueueName), noop);
-      } catch (e) {
+      }
+      // istanbul ignore next
+      catch (e) {
         console.log('rabbitr cleanup exception', e);
       }
     }.bind(this);
@@ -598,6 +624,7 @@ class Rabbitr extends EventEmitter {
     channel.consume(this._formatName(returnQueueName), processMessage, {
       noAck: true
     }, (err) => {
+      // istanbul ignore next
       if (err) {
         this.emit('error', err);
         if (cb) cb(err, null);
@@ -669,6 +696,7 @@ class Rabbitr extends EventEmitter {
       this._runMiddleware(message, (middlewareErr: Error) => {
         // TODO - how to handle common error function thing for middleware?
         var _cb: Rabbitr.Callback<TOutput> = (err?: Error, response?: TOutput): void => {
+          // istanbul ignore next
           if (err) {
             debug(chalk.cyan('rpcListener') + ' ' + chalk.red('hit error'), err);
           }

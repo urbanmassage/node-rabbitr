@@ -27,7 +27,7 @@ describe('rabbitr#pubsub', function() {
 
     rabbit.subscribe(queueName);
     rabbit.bindExchangeToQueue(exchangeName, queueName, () =>
-      rabbit.send(exchangeName, testData)
+      rabbit.send(exchangeName, testData, () => void 0)
     );
 
     rabbit.on(queueName, function(message) {
@@ -57,7 +57,7 @@ describe('rabbitr#pubsub', function() {
 
     rabbit.subscribe(queueName);
     rabbit.bindExchangeToQueue(exchangeName, queueName, () =>
-      rabbit.send(exchangeName, new Buffer(data))
+      rabbit.send(exchangeName, new Buffer(data), () => void 0)
     );
 
     rabbit.on(queueName, function(message) {
