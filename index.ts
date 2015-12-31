@@ -9,8 +9,6 @@ const shortId = require('shortid');
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
-function noop() { return void 0; };
-
 if (parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) < 0.4) {
   // Monkey-patch :(
   // https://github.com/nodejs/node-v0.x-archive/issues/5110
@@ -77,17 +75,16 @@ class Rabbitr extends EventEmitter {
   constructor(opts: Rabbitr.IOptions) {
     super();
 
-    // you MUST provide a 'url' rather than separate 'host', 'password', 'vhost' now
     this.opts = extend({
-      queuePrefix: '', // preffixed to all queue names - useful for environment and app names etc
-      setup(done) { done(); }, // called once the connection is ready but before anything is bound (allows for ORM setup etc)
-      connectionOpts: extend({
-        heartbeat: 1
-      }, opts && opts.connectionOpts || {}),
+      queuePrefix: '',
+      setup(done) { done(); },
       ackWarningTimeout: 5000,
       autoAckOnTimeout: null,
-      defaultRPCExpiry: DEFAULT_RPC_EXPIRY
+      defaultRPCExpiry: DEFAULT_RPC_EXPIRY,
     }, opts);
+    this.opts.connectionOpts = extend({
+      heartbeat: 1
+    }, opts && opts.connectionOpts || {});
 
     this._connect();
   }
@@ -703,9 +700,14 @@ class Rabbitr extends EventEmitter {
 };
 
 declare module Rabbitr {
+  /** you MUST provide a 'url' rather than separate 'host', 'password', 'vhost' now */
   export interface IOptions {
     url: string;
+
+    /** preffixed to all queue names - useful for environment and app names etc */
     queuePrefix?: string;
+
+    /** called once the connection is ready but before anything is bound (allows for ORM setup etc) */
     setup?: (done: Rabbitr.ErrorCallback) => void;
     connectionOpts?: {
       heartbeat?: boolean;
