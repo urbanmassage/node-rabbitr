@@ -89,12 +89,6 @@ class Rabbitr extends EventEmitter {
       defaultRPCExpiry: DEFAULT_RPC_EXPIRY
     }, opts);
 
-    Object.keys(this.opts).forEach(key => {
-      if (hasProp(opts, key) && opts[key]) {
-        this.opts[key] = opts[key];
-      }
-    });
-
     this._connect();
   }
 
