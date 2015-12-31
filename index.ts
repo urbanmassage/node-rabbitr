@@ -14,7 +14,7 @@ if (parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) < 0.4) {
   // https://github.com/nodejs/node-v0.x-archive/issues/5110
   Buffer.prototype.toJSON = function() {
     return { type: 'Buffer', data: Array.prototype.slice.call(this, 0) };
-  }
+  };
 }
 
 function stringify(obj: any): string {
@@ -29,9 +29,8 @@ function parse(json: string): any {
   });
 }
 
-function hasProp(obj: Object, prop: string): boolean {
-  return Object.prototype.hasOwnProperty.call(obj, prop);
-}
+const noop = (): void => void 0;
+const call = (cb: Function) => cb();
 
 class TimeoutError extends Error {
   topic: string;
@@ -58,26 +57,22 @@ class Rabbitr extends EventEmitter {
     queue: string,
     cb: Rabbitr.ErrorCallback,
   }[] = [];
-  sendQueue = [];
-  setTimerQueue = [];
-  clearTimerQueue = [];
-  rpcListenerQueue = [];
-  rpcExecQueue: {
-    topic: string,
-    data: any,
-    opts: Rabbitr.IRpcExecOptions,
-    cb: Rabbitr.Callback<any>
-  }[] = [];
-  middleware = [];
+  sendQueue = new Array<{ topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions }>();
+  setTimerQueue = new Array<{ topic: string, uniqueID: string, data: any, ttl: number, cb?: Rabbitr.ErrorCallback }>();
+  clearTimerQueue = new Array<{ topic: string, uniqueID: string, cb: Rabbitr.ErrorCallback }>();
+  rpcListenerQueue = new Array<{ topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor?: Rabbitr.IRpcListenerExecutor<any, any> }>();
+  rpcExecQueue = new Array<{ topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb: Rabbitr.Callback<any> }>();
+  middleware = new Array<Rabbitr.Middleware>();
 
   protected connection: amqplib.Connection;
 
   constructor(opts: Rabbitr.IOptions) {
     super();
 
-    this.opts = extend({
+    this.opts = extend(<Rabbitr.IOptions>{
+      url: '',
       queuePrefix: '',
-      setup(done) { done(); },
+      setup: call,
       ackWarningTimeout: 5000,
       autoAckOnTimeout: null,
       defaultRPCExpiry: DEFAULT_RPC_EXPIRY,
@@ -85,6 +80,10 @@ class Rabbitr extends EventEmitter {
     this.opts.connectionOpts = extend({
       heartbeat: 1
     }, opts && opts.connectionOpts || {});
+
+    if (!this.opts.url) {
+      throw new Error('Missing `url` in Rabbitr options');
+    }
 
     this._connect();
   }
@@ -134,7 +133,7 @@ class Rabbitr extends EventEmitter {
           if (this.doneSetup) {
             this._afterSetup();
           } else {
-            this.opts.setup((err) => {
+            this.opts.setup((err: Error) => {
               if (err) throw err;
 
               this.doneSetup = true;
@@ -222,7 +221,7 @@ class Rabbitr extends EventEmitter {
     this.readyQueue.push(callback);
   }
 
-  private _formatName(name) {
+  private _formatName(name: string) {
     if (this.opts.queuePrefix) {
       name = this.opts.queuePrefix + '.' + name;
     }
@@ -231,8 +230,10 @@ class Rabbitr extends EventEmitter {
   }
 
   // standard pub/sub stuff
+
   send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
   send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
+
   send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void {
     if (!this.ready) {
       debug('adding item to send queue');
@@ -295,7 +296,7 @@ class Rabbitr extends EventEmitter {
 
         channel.prefetch(options ? options.prefetch || 1 : 1);
 
-        const processMessage = function processMessage(msg) {
+        const processMessage = function processMessage(msg: any) {
           if (!msg) return;
 
           var data = msg.content.toString();
@@ -354,13 +355,13 @@ class Rabbitr extends EventEmitter {
             return this.emit(topic, message);
           }
 
-          this._runMiddleware(message, (middlewareErr) => {
+          this._runMiddleware(message, (middlewareErr: Error) => {
             // TODO - how to handle common error function thing for middleware?
             this.emit(topic, message);
           });
         }.bind(this);
 
-        channel.consume(this._formatName(topic), processMessage, (err, ok) => {
+        channel.consume(this._formatName(topic), processMessage, (err: Error/*, ok*/) => {
           if (err) {
             this.emit('error', err);
             if (cb) cb(err);
@@ -372,6 +373,7 @@ class Rabbitr extends EventEmitter {
       });
     });
   }
+
   bindExchangeToQueue(exchange: string, queue: string, cb?: Rabbitr.ErrorCallback) {
     if (!this.ready) {
       debug('adding item to bindings queue');
@@ -411,7 +413,8 @@ class Rabbitr extends EventEmitter {
   private _timerQueueName(topic: string, uniqueID: string): string {
     return 'dlq.' + topic + '.' + uniqueID;
   }
-  setTimer(topic: string, uniqueID, data, ttl, cb?: Function) {
+
+  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback) {
     if (!this.ready) {
       debug('adding item to setTimer queue');
       this.setTimerQueue.push({
@@ -445,7 +448,8 @@ class Rabbitr extends EventEmitter {
 
       this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
         contentType: 'application/json',
-        expiration: ttl
+        // TODO - should we do anything with this?
+        expiration: ttl + '',
       });
 
       process.nextTick(function() {
@@ -453,7 +457,8 @@ class Rabbitr extends EventEmitter {
       });
     });
   }
-  clearTimer(topic: string, uniqueID, cb: Rabbitr.ErrorCallback) {
+
+  clearTimer(topic: string, uniqueID: string, cb: Rabbitr.ErrorCallback) {
     if (!this.ready) {
       debug('adding item to clearTimer queue');
       this.clearTimerQueue.push({
@@ -472,9 +477,9 @@ class Rabbitr extends EventEmitter {
     try {
       // For some reason we get an error thrown here.
       // TODO - investigate
-    this._timerChannel.deleteQueue(timerQueue, {}, (err: Error) => {
-      if (cb) cb(err);
-    });
+      this._timerChannel.deleteQueue(timerQueue, {}, (err: Error) => {
+        if (cb) cb(err);
+      });
     } catch (err) {
       cb(err);
     }
@@ -530,7 +535,7 @@ class Rabbitr extends EventEmitter {
     const cleanup = function cleanup() {
       // delete the return queue and close exc channel
       try {
-        channel.deleteQueue(this._formatName(returnQueueName), function() {});
+        channel.deleteQueue(this._formatName(returnQueueName), noop);
       } catch (e) {
         console.log('rabbitr cleanup exception', e);
       }
@@ -546,7 +551,7 @@ class Rabbitr extends EventEmitter {
       cleanup();
     }, timeoutMS);
 
-    const processMessage = function processMessage(msg) {
+    const processMessage = function processMessage(msg: any) {
       if (!msg) return;
 
       let data = msg.content.toString();
@@ -568,7 +573,7 @@ class Rabbitr extends EventEmitter {
       if (error) {
         error = JSON.parse(error);
         if (data.isError) {
-          var err = new Error(error.message);
+          var err: any = new Error(error.message);
           Object.keys(error).forEach(function(key) {
             if (err[key] !== error[key]) {
               err[key] = error[key];
@@ -652,9 +657,9 @@ class Rabbitr extends EventEmitter {
         shift: message.ack,
       };
 
-      this._runMiddleware(message, (middlewareErr) => {
+      this._runMiddleware(message, (middlewareErr: Error) => {
         // TODO - how to handle common error function thing for middleware?
-        var _cb: Rabbitr.Callback<TOutput> = (err?, response?: TOutput): void => {
+        var _cb: Rabbitr.Callback<TOutput> = (err?: Error, response?: TOutput): void => {
           if (err) {
             debug(chalk.cyan('rpcListener') + ' ' + chalk.red('hit error'), err);
           }
@@ -694,10 +699,10 @@ class Rabbitr extends EventEmitter {
   }
 
   // message middleware support
-  use(middlewareFunc: Rabbitr.ErrorCallback) {
+  use(middlewareFunc: Rabbitr.Middleware) {
     this.middleware.push(middlewareFunc);
   }
-  private _runMiddleware(message, next: Rabbitr.ErrorCallback) {
+  private _runMiddleware(message: Rabbitr.IMessage<any>, next: Rabbitr.ErrorCallback) {
     if (this.middleware.length === 0) return next();
     async.eachSeries(this.middleware, (middlewareFunc, next) => {
       middlewareFunc(message, next);
@@ -777,6 +782,11 @@ declare module Rabbitr {
       expiration: number,
       returnQueue: string,
     };
+  }
+
+  export interface Middleware {
+    // TODO - better annotation
+    (message: IMessage<any>, cb: Function, next?: Function): void;
   }
 }
 
