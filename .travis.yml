@@ -1,6 +1,5 @@
 language: node_js
 node_js:
-  - stable
   - "4.1"
   - "4.0"
   - "0.12"
@@ -14,4 +13,6 @@ script:
   - npm test
 
 after_success:
-  - [ "${TRAVIS_NODE_VERSION}" != "stable" ] || npm run coverage && npm run sendcoverage
+  - test $TRAVIS_NODE_VERSION = "4.1" && \
+    npm run coverage && \
+    npm run sendcoverage
