@@ -14,5 +14,6 @@ script:
   - npm test
 
 after_success:
-  - npm run coverage
-  - cat ./coverage/lcov-mapped.info | ./node_modules/codecov.io/bin/codecov.io.js
+  - > [ "${TRAVIS_NODE_VERSION}" != "stable" ] ||
+      npm run coverage &&
+      cat "./coverage/lcov-mapped.info" | ./node_modules/codecov.io/bin/codecov.io.js
