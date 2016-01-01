@@ -12,5 +12,7 @@ services:
 
 script:
   - npm test
+
+after_success:
   - npm run coverage -- "--reporter" "mocha-junit-reporter"
   - cat ./coverage/lcov-mapped.info | ./node_modules/codecov.io/bin/codecov.io.js
