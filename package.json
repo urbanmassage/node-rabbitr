@@ -9,7 +9,8 @@
     "pretest": "npm run build",
     "test": "mocha",
     "coverage": "istanbul cover _mocha --",
-    "postcoverage": "if [ -f coverage/lcov.info ]; then node node_modules/.bin/map-coverage && mv coverage/lcov.info coverage/lcov-raw.info && mv coverage/lcov-mapped.info coverage/lcov.info; fi"
+    "postcoverage": "if [ -f coverage/lcov.info ]; then node node_modules/.bin/map-coverage && mv coverage/lcov.info coverage/lcov-raw.info && mv coverage/lcov-mapped.info coverage/lcov.info; fi",
+    "sendcoverage": "if [ -f coverage/lcov-mapped.info ]; then cat ./coverage/lcov-mapped.info | ./node_modules/codecov.io/bin/codecov.io.js; fi"
   },
   "author": "Giles Williams",
   "license": "ISC",
