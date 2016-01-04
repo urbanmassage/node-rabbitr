@@ -13,6 +13,6 @@ script:
   - npm test
 
 after_success:
-  - test $TRAVIS_NODE_VERSION = "4.1" && \
-    npm run coverage && \
+  - test $TRAVIS_NODE_VERSION = "4.1" &&
+    npm run coverage &&
     npm run sendcoverage
