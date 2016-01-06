@@ -1,5 +1,5 @@
 # Rabbitr
-[![CircleCI](https://img.shields.io/circleci/project/urbanmassage/node-rabbitr.svg)](https://circleci.com/gh/urbanmassage/node-rabbitr)
+[![TravisCI](https://img.shields.io/travis/urbanmassage/node-rabbitr.svg)](https://travis-ci.org/urbanmassage/node-rabbitr)
 [![npm](https://img.shields.io/npm/v/rabbitr.svg)](https://www.npmjs.com/package/rabbitr)
 [![npm](https://img.shields.io/npm/dt/rabbitr.svg)](https://www.npmjs.com/package/rabbitr)
 [![Codecov](https://img.shields.io/codecov/c/github/urbanmassage/node-rabbitr.svg)](https://codecov.io/github/urbanmassage/node-rabbitr)

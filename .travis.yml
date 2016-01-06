@@ -1,0 +1,18 @@
+language: node_js
+node_js:
+  - "4.1"
+  - "4.0"
+  - "0.12"
+  - "0.11"
+  - "0.10"
+
+services:
+  - rabbitmq
+
+script:
+  - npm test
+
+after_success:
+  - test $TRAVIS_NODE_VERSION = "4.1" &&
+    npm run coverage &&
+    npm run sendcoverage

@@ -9,6 +9,7 @@ const shortId = require('shortid');
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
+// istanbul ignore next
 if (parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) < 0.4) {
   // Monkey-patch :(
   // https://github.com/nodejs/node-v0.x-archive/issues/5110
