@@ -312,7 +312,8 @@ class Rabbitr extends EventEmitter {
       channel.assertQueue(this._formatName(topic), {}, (err, ok) => {
         // istanbul ignore next
         if (err) {
-          return cb(err);
+          if (cb) cb(err);
+          return;
         }
 
         channel.prefetch(options ? options.prefetch || 1 : 1);
@@ -510,7 +511,7 @@ class Rabbitr extends EventEmitter {
       });
     } // istanbul ignore next
     catch (err) {
-      cb(err);
+      if (cb) cb(err);
     }
   }
 
@@ -617,7 +618,7 @@ class Rabbitr extends EventEmitter {
         }
       }
 
-      cb(error, response);
+      if (cb) cb(error, response);
 
       cleanup();
     }.bind(this);
