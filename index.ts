@@ -249,9 +249,14 @@ class Rabbitr extends EventEmitter {
 
   // method to destroy anything for this instance of rabbitr
   destroy(cb?: ErrorCallback): void {
+    debug('destroying');
     async.each(this._openChannels, (channel, next) => {
       channel.close(err => {
-        debug('channel closed');
+        if (err) {
+          debug('Error while closing connection', err);
+        } else {
+          debug('channel closed');
+        }
         next(err);
       });
     }, err => {
@@ -261,9 +266,14 @@ class Rabbitr extends EventEmitter {
       }
 
       this.connection.close(err => {
+        if (err) {
+          debug('Error while closing connection', err);
+          if (cb) cb(err);
+          return;
+        }
         debug('connection closed');
         this.removeAllListeners();
-        if (cb) cb(err);
+        if (cb) cb();
       });
     });
   }
