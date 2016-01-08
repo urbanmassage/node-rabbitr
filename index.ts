@@ -103,7 +103,7 @@ class Rabbitr extends EventEmitter {
       }
 
       // make sure to close the connection if the process terminates
-      let close = conn.close.bind(conn);
+      let close = () => conn.close();
       process.once('SIGINT', close);
 
       // istanbul ignore next
@@ -361,7 +361,7 @@ class Rabbitr extends EventEmitter {
 
         channel.prefetch(options ? options.prefetch || 1 : 1);
 
-        const processMessage = function processMessage(msg: any) {
+        const processMessage = (msg: any) => {
           if (!msg) return;
 
           var data = msg.content.toString();
@@ -390,8 +390,8 @@ class Rabbitr extends EventEmitter {
           }, this.opts.ackWarningTimeout);
 
           const message: Rabbitr.IMessage<TMessage> = {
-            send: this.send.bind(this),
-            rpcExec: this.rpcExec.bind(this),
+            send: (topic, data, cb?, opts?) => this.send(topic, data, cb, opts),
+            rpcExec: (topic, data, opts, cb?) => this.rpcExec(topic, data, opts, cb),
             topic,
             data,
             channel,
@@ -424,7 +424,7 @@ class Rabbitr extends EventEmitter {
             // TODO - how to handle common error function thing for middleware?
             this.emit(topic, message);
           });
-        }.bind(this);
+        };
 
         channel.consume(this._formatName(topic), processMessage, (err: Error/*, ok*/) => {
           // istanbul ignore next
@@ -608,7 +608,7 @@ class Rabbitr extends EventEmitter {
     });
 
     debug('using rpc return queue "%s"', chalk.cyan(returnQueueName));
-    const cleanup = function cleanup() {
+    const cleanup = () => {
       // delete the return queue and close exc channel
       try {
         channel.deleteQueue(this._formatName(returnQueueName), noop);
@@ -617,7 +617,7 @@ class Rabbitr extends EventEmitter {
       catch (e) {
         console.log('rabbitr cleanup exception', e);
       }
-    }.bind(this);
+    };
 
     // set a timeout
     const timeoutMS = (opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
@@ -629,7 +629,7 @@ class Rabbitr extends EventEmitter {
       cleanup();
     }, timeoutMS);
 
-    const processMessage = function processMessage(msg: any) {
+    const processMessage = (msg: any) => {
       if (!msg) return;
 
       let data = msg.content.toString();
@@ -664,7 +664,7 @@ class Rabbitr extends EventEmitter {
       if (cb) cb(error, response);
 
       cleanup();
-    }.bind(this);
+    };
 
     channel.consume(this._formatName(returnQueueName), processMessage, {
       noAck: true
