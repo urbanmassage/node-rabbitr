@@ -254,6 +254,7 @@ class Rabbitr extends EventEmitter {
     debug('destroying');
     async.each(this._openChannels, (channel, next) => {
       channel.close(err => {
+        // istanbul ignore next
         if (err) {
           debug('Error while closing connection', err);
         } else {
@@ -262,12 +263,14 @@ class Rabbitr extends EventEmitter {
         next(err);
       });
     }, err => {
+      // istanbul ignore next
       if (err) {
         if (cb) cb(err);
         return;
       }
 
       this.connection.close(err => {
+        // istanbul ignore next
         if (err) {
           debug('Error while closing connection', err);
           if (cb) cb(err);
