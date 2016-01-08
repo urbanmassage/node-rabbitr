@@ -3,7 +3,7 @@ import async = require('async');
 import {expect} from 'chai';
 
 describe('rabbitr#destroy', function() {
-  it('should be able to destroy an instance once initted', function(done) {
+  it('should be able to destroy an instance once initialized', function(done) {
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
