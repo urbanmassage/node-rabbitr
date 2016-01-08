@@ -78,9 +78,13 @@ class Rabbitr extends EventEmitter {
     if (!this.opts.url) {
       throw new Error('Missing `url` in Rabbitr options');
     }
+    
+    this._openChannels = [];
 
     this._connect();
   }
+  
+  private _openChannels: amqplib.Channel[];
 
   private _timerChannel: amqplib.Channel;
   private _publishChannel: amqplib.Channel;
@@ -115,6 +119,8 @@ class Rabbitr extends EventEmitter {
         this._timerChannel = channel;
         this._publishChannel = channel;
         this._cachedChannel = channel;
+        
+        this._openChannels.push(channel);
 
         conn.createChannel((err: Error, channel: amqplib.Channel): void => {
           // istanbul ignore next
@@ -123,6 +129,8 @@ class Rabbitr extends EventEmitter {
           }
 
           this._rpcReturnChannel = channel;
+        
+          this._openChannels.push(channel);
 
           // cache the connection and do all the setup work
           this.connection = conn;
@@ -239,6 +247,30 @@ class Rabbitr extends EventEmitter {
     return name;
   }
 
+  // method to destroy anything for this instance of rabbitr
+  destroy(cb?: (err?: Error | any) => void): void;
+  destroy(cb?: (err?: Error | any) => void): void {
+    async.each(this._openChannels, (channel, next) => {
+      channel.close((err) => {
+        next(err);
+      });
+    }, (err) => {
+      if(err) {
+        if(cb) cb(err);
+        return;
+      }
+
+      this.connection.close((err) => {
+        if(err) {
+          if(cb) cb(err);
+          return;
+        }
+
+        if(cb) cb();
+      });
+    });
+  }
+
   // standard pub/sub stuff
 
   send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
@@ -308,6 +340,8 @@ class Rabbitr extends EventEmitter {
         if (cb) cb(err);
         return;
       }
+      
+      this._openChannels.push(channel);
 
       channel.assertQueue(this._formatName(topic), {}, (err, ok) => {
         // istanbul ignore next
