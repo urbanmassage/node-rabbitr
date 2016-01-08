@@ -79,8 +79,12 @@ class Rabbitr extends EventEmitter {
       throw new Error('Missing `url` in Rabbitr options');
     }
 
+    this._openChannels = [];
+
     this._connect();
   }
+
+  private _openChannels: amqplib.Channel[];
 
   private _timerChannel: amqplib.Channel;
   private _publishChannel: amqplib.Channel;
@@ -99,10 +103,12 @@ class Rabbitr extends EventEmitter {
       }
 
       // make sure to close the connection if the process terminates
-      process.once('SIGINT', conn.close.bind(conn));
+      let close = () => conn.close();
+      process.once('SIGINT', close);
 
+      // istanbul ignore next
       conn.on('close', () => {
-        // istanbul ignore next
+        process.removeListener('SIGINT', close);
         throw new Error('Disconnected from RabbitMQ');
       });
 
@@ -116,6 +122,8 @@ class Rabbitr extends EventEmitter {
         this._publishChannel = channel;
         this._cachedChannel = channel;
 
+        this._openChannels.push(channel);
+
         conn.createChannel((err: Error, channel: amqplib.Channel): void => {
           // istanbul ignore next
           if (err) {
@@ -123,6 +131,8 @@ class Rabbitr extends EventEmitter {
           }
 
           this._rpcReturnChannel = channel;
+
+          this._openChannels.push(channel);
 
           // cache the connection and do all the setup work
           this.connection = conn;
@@ -239,6 +249,37 @@ class Rabbitr extends EventEmitter {
     return name;
   }
 
+  // method to destroy anything for this instance of rabbitr
+  destroy(cb?: ErrorCallback): void {
+    debug('destroying');
+    async.each(this._openChannels, (channel, next) => {
+      channel.close(err => {
+        if (err) {
+          debug('Error while closing connection', err);
+        } else {
+          debug('channel closed');
+        }
+        next(err);
+      });
+    }, err => {
+      if (err) {
+        if (cb) cb(err);
+        return;
+      }
+
+      this.connection.close(err => {
+        if (err) {
+          debug('Error while closing connection', err);
+          if (cb) cb(err);
+          return;
+        }
+        debug('connection closed');
+        this.removeAllListeners();
+        if (cb) cb();
+      });
+    });
+  }
+
   // standard pub/sub stuff
 
   send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
@@ -309,6 +350,8 @@ class Rabbitr extends EventEmitter {
         return;
       }
 
+      this._openChannels.push(channel);
+
       channel.assertQueue(this._formatName(topic), {}, (err, ok) => {
         // istanbul ignore next
         if (err) {
@@ -318,7 +361,7 @@ class Rabbitr extends EventEmitter {
 
         channel.prefetch(options ? options.prefetch || 1 : 1);
 
-        const processMessage = function processMessage(msg: any) {
+        const processMessage = (msg: any) => {
           if (!msg) return;
 
           var data = msg.content.toString();
@@ -347,8 +390,8 @@ class Rabbitr extends EventEmitter {
           }, this.opts.ackWarningTimeout);
 
           const message: Rabbitr.IMessage<TMessage> = {
-            send: this.send.bind(this),
-            rpcExec: this.rpcExec.bind(this),
+            send: (topic, data, cb?, opts?) => this.send(topic, data, cb, opts),
+            rpcExec: (topic, data, opts, cb?) => this.rpcExec(topic, data, opts, cb),
             topic,
             data,
             channel,
@@ -381,7 +424,7 @@ class Rabbitr extends EventEmitter {
             // TODO - how to handle common error function thing for middleware?
             this.emit(topic, message);
           });
-        }.bind(this);
+        };
 
         channel.consume(this._formatName(topic), processMessage, (err: Error/*, ok*/) => {
           // istanbul ignore next
@@ -466,7 +509,7 @@ class Rabbitr extends EventEmitter {
         'x-dead-letter-routing-key': '*'
       },
       expires: (ttl + 1000)
-    }, (err) => {
+    }, err => {
       // istanbul ignore next
       if (err) {
         this.emit('error', err);
@@ -565,7 +608,7 @@ class Rabbitr extends EventEmitter {
     });
 
     debug('using rpc return queue "%s"', chalk.cyan(returnQueueName));
-    const cleanup = function cleanup() {
+    const cleanup = () => {
       // delete the return queue and close exc channel
       try {
         channel.deleteQueue(this._formatName(returnQueueName), noop);
@@ -574,7 +617,7 @@ class Rabbitr extends EventEmitter {
       catch (e) {
         console.log('rabbitr cleanup exception', e);
       }
-    }.bind(this);
+    };
 
     // set a timeout
     const timeoutMS = (opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
@@ -586,7 +629,7 @@ class Rabbitr extends EventEmitter {
       cleanup();
     }, timeoutMS);
 
-    const processMessage = function processMessage(msg: any) {
+    const processMessage = (msg: any) => {
       if (!msg) return;
 
       let data = msg.content.toString();
@@ -621,11 +664,11 @@ class Rabbitr extends EventEmitter {
       if (cb) cb(error, response);
 
       cleanup();
-    }.bind(this);
+    };
 
     channel.consume(this._formatName(returnQueueName), processMessage, {
       noAck: true
-    }, (err) => {
+    }, err => {
       // istanbul ignore next
       if (err) {
         this.emit('error', err);
