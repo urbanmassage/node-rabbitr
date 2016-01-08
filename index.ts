@@ -106,7 +106,6 @@ class Rabbitr extends EventEmitter {
       let close = () => conn.close();
       process.once('SIGINT', close);
 
-      // istanbul ignore next
       conn.on('close', () => {
         process.removeListener('SIGINT', close);
         throw new Error('Disconnected from RabbitMQ');
