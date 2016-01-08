@@ -26,11 +26,7 @@ describe('rabbitr#destroy', function() {
       rabbit.whenReady(() => {
         setTimeout(function() {
           rabbit.destroy(err => {
-            try {
-              global.gc();
-            } catch (e) {
-              return done(new Error(`You must run the test with 'mocha -gc'`));
-            }
+            global.gc();
             done(err);
           });
         }, 200);
