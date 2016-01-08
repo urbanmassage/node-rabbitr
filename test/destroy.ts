@@ -33,12 +33,17 @@ describe('rabbitr#destroy', function() {
       });
     }
 
+    /** number of times to run a connection cycle */
+    let times = 5;
+
+    this.timeout(1000 * times);
+
     // run a cycle before so we get accurate measures.
     runCycle(err => {
       if (err) return done(err);
       let {heapUsed} = process.memoryUsage();
 
-      async.times<void>(10, (n, done) => runCycle(<any>done), function(err) {
+      async.timesSeries<void>(times, (n, done) => runCycle(<any>done), function(err) {
         if (err) return done(err);
 
         expect(process.memoryUsage().heapUsed).to.be.closeTo(heapUsed, heapUsed * 0.1);
