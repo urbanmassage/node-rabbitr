@@ -28,6 +28,7 @@ deploy:
   api_key:
     secure: x3vSesgwXgw2S7AWad/jYprM/vdtI6pk86F4t+E3gyIuRIksXpGqH/M1pmboyVQAyApfngBRQPXjhcTw3MWD7hJhC6qmhHcSpibfVmtFgZoUnfHyyjfhVbjm5IgPnrjzFbyPzlU7sI/0X3knQWJt711VbYnatyehRZJnORDr8L/Ecyj/bhJLOrDHBu02OFppdyGbGjPcXYSyt71zLH74LxsZedOWUdt9ThIOuJXrV4heV86jMg9RjHDG6PzZmpU5zKiYEgnCsWZEw/wLNKjlFWGDY+m2Z7YJkLKtXC9Ix4MSOel9/hITIcQ6zT0c+zV2n0YunAtxJoGUpHAcQQzd1zz9V8LzfC3UZzKoheBbmv7PD/ERvG62GaLkTWCuaDuRAl9QF/sF9G38QHqfvmtYOhVkKFTDPzsthMzzChT29ya3vPzDFLXrXC2zRRjSp7RefyrYf68n7NGDmf5GO2Tr7d+E0WeNjCvlTBiwvXtCfORos1S64w/MagLaD4jxp4mbmQPaYqiQNaqTGjfga/R5e/O8XGnb3yiGjUGCTwKHciDavj6HDHffMLanCxz/2TNSMjn+fcHqcIp5TUyY6Xns6hivcXABVin4aReAeqDaEP2lX4QUNMUgLvUPTEvXhz+CX5C175WU9pnbRGhl+wAb3AQVGoV/QCiK0isKRuVVkWE=
   on:
+    node: '4.1'
     tags: true
     repo: urbanmassage/node-rabbitr
   skip_cleanup: true
