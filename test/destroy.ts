@@ -4,7 +4,7 @@ import {expect} from 'chai';
 const uuid = require('uuid');
 
 describe('rabbitr#destroy', function() {
-  it('should be able to destroy an instance once initialized', function(done) {
+  it('should be able to destroy an instance with pubsub listeners', function(done) {
     const exchangeName = uuid.v4() + '.test';
     const queueName = uuid.v4() + '.test';
 
@@ -15,6 +15,24 @@ describe('rabbitr#destroy', function() {
       rabbit.subscribe(queueName);
       rabbit.bindExchangeToQueue(exchangeName, queueName);
       rabbit.on(exchangeName, ({ack}) => ack());
+
+      setTimeout(function() {
+        rabbit.destroy((err) => {
+          done(err);
+        });
+      }, 200);
+    });
+  });
+
+  it('should be able to destroy an instance with rpc listeners', function(done) {
+    const channelName = uuid.v4() + '.rpc_test';
+
+    const rabbit = new Rabbitr({
+      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+    });
+    rabbit.whenReady(() => {
+      rabbit.rpcListener(channelName, ({ack}) => ack());
+      rabbit.rpcExec(channelName, {}, () => void 0);
 
       setTimeout(function() {
         rabbit.destroy((err) => {
