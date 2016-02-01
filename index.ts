@@ -826,6 +826,7 @@ declare module Rabbitr {
   }
   export interface IRpcListenerOptions<TInput, TOutput> {
     middleware?: Function[];
+    prefetch?: number;
   }
   export interface IRpcListenerExecutor<TInput, TOutput> {
     (message: IMessage<TInput>, respond: Callback<TOutput>): void;
