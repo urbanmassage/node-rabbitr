@@ -718,7 +718,7 @@ class Rabbitr extends EventEmitter {
     var rpcQueue = this._rpcQueueName(topic);
 
     (<any>opts).skipMiddleware = true;
-    this.subscribe(rpcQueue, opts);
+    this.subscribe(rpcQueue, opts, function() {});
 
     debug('has rpcListener for', topic);
 
