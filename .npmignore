@@ -1,8 +1,8 @@
-**/.DS_Store
-**.log
+.DS_Store
+*.log
 coverage/
 node_modules/
 typings/
-scripts/
+examples/
 test/
 .vscode/

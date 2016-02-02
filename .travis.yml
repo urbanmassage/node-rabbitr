@@ -8,6 +8,9 @@ node_js:
 services:
 - rabbitmq
 script:
+- npm i -g typings
+- typings install
+- npm run build
 - npm test
 after_success:
 - test $TRAVIS_NODE_VERSION = "4.1" && npm run coverage && npm run sendcoverage

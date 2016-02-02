@@ -1,0 +1,15 @@
+{
+  "ambientDependencies": {
+    "amqplib": "github:DefinitelyTyped/DefinitelyTyped/amqplib/amqplib.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94",
+    "async": "github:DefinitelyTyped/DefinitelyTyped/async/async.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
+    "chalk": "github:DefinitelyTyped/DefinitelyTyped/chalk/chalk.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
+    "debug": "github:DefinitelyTyped/DefinitelyTyped/debug/debug.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
+    "node": "github:DefinitelyTyped/DefinitelyTyped/node/node.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94",
+    "shortid": "github:DefinitelyTyped/DefinitelyTyped/shortid/shortid.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
+    "when": "github:DefinitelyTyped/DefinitelyTyped/when/when.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94"
+  },
+  "ambientDevDependencies": {
+    "chai": "github:DefinitelyTyped/DefinitelyTyped/chai/chai.d.ts#9c25433c84251bfe72bf0030a95edbbb2c81c9d5",
+    "mocha": "github:DefinitelyTyped/DefinitelyTyped/mocha/mocha.d.ts#d6dd320291705694ba8e1a79497a908e9f5e6617"
+  }
+}
