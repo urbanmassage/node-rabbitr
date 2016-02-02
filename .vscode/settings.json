@@ -3,7 +3,9 @@
 		"test/*.d.ts": true,
 		"examples/*.d.ts": true,
 		"index.d.ts": true,
-		"**/*.js": true,
+		"*.js": true,
+		"test/*.js": true,
+		"examples/*.js": true,
 		"**/*.map": true
 	}
 }
