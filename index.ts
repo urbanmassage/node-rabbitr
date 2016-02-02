@@ -428,7 +428,7 @@ class Rabbitr extends EventEmitter {
           });
         };
 
-        channel.consume(this._formatName(topic), processMessage, (err: Error/*, ok*/) => {
+        channel.consume(this._formatName(topic), processMessage, {}, (err: Error/*, ok*/) => {
           // istanbul ignore next
           if (err) {
             this.emit('error', err);
