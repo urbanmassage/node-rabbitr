@@ -354,7 +354,9 @@ class Rabbitr extends EventEmitter {
 
       this._openChannels.push(channel);
 
-      channel.assertQueue(this._formatName(topic), {}, (err, ok) => {
+      channel.assertQueue(this._formatName(topic), {
+        durable: options ? options.durable || true : true,
+      }, (err, ok) => {
         // istanbul ignore next
         if (err) {
           if (cb) cb(err);
@@ -606,7 +608,8 @@ class Rabbitr extends EventEmitter {
 
     channel.assertQueue(this._formatName(returnQueueName), {
       exclusive: true,
-      expires: (this.opts.defaultRPCExpiry * 1 + 1000)
+      expires: (this.opts.defaultRPCExpiry * 1 + 1000),
+      durable: false,
     });
 
     debug('using rpc return queue "%s"', chalk.cyan(returnQueueName));
@@ -718,6 +721,7 @@ class Rabbitr extends EventEmitter {
     var rpcQueue = this._rpcQueueName(topic);
 
     (<any>opts).skipMiddleware = true;
+    (<any>opts).durable = false;
     this.subscribe(rpcQueue, opts, function() {});
 
     debug('has rpcListener for', topic);
@@ -834,6 +838,7 @@ declare module Rabbitr {
   export interface ISubscribeOptions {
     prefetch?: number;
     skipMiddleware?: boolean;
+    durable?: boolean;
   }
   export interface ISendOptions {
   }
