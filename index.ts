@@ -2,6 +2,7 @@ import async = require('async');
 import chalk = require('chalk');
 import {EventEmitter} from 'events';
 import amqplib = require('amqplib/callback_api');
+import merge = require('merge');
 
 const debug = require('debug')('rabbitr');
 const extend = require('util')._extend;
@@ -356,9 +357,9 @@ class Rabbitr extends EventEmitter {
 
       this._openChannels.push(channel);
 
-      channel.assertQueue(this._formatName(topic), {
-        durable: options ? options.durable || true : true,
-      }, (err, ok) => {
+      channel.assertQueue(this._formatName(topic), merge({}, options, {
+        durable: true,
+      }), (err, ok) => {
         // istanbul ignore next
         if (err) {
           if (cb) cb(err);

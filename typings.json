@@ -11,5 +11,8 @@
   "ambientDevDependencies": {
     "chai": "github:DefinitelyTyped/DefinitelyTyped/chai/chai.d.ts#9c25433c84251bfe72bf0030a95edbbb2c81c9d5",
     "mocha": "github:DefinitelyTyped/DefinitelyTyped/mocha/mocha.d.ts#d6dd320291705694ba8e1a79497a908e9f5e6617"
+  },
+  "dependencies": {
+    "merge": "github:louy/typed-merge#95d803b2b86a03742039bac4b43e20f86abb79ca"
   }
 }
