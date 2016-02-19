@@ -357,7 +357,9 @@ class Rabbitr extends EventEmitter {
 
       this._openChannels.push(channel);
 
-      channel.assertQueue(this._formatName(topic), merge({}, options, {
+      channel.assertQueue(this._formatName(topic), merge({
+        durable: true,
+      }, options, {
         durable: true,
       }), (err, ok) => {
         // istanbul ignore next
