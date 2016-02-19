@@ -62,6 +62,8 @@ class Rabbitr extends EventEmitter {
   constructor(opts: Rabbitr.IOptions) {
     super();
 
+    console.warn('Rabbitr has a major breaking change in version 8 - rpcListener queues are no longer durable. You will need to remove all rpcListener queues from RabbitMQ during deployment.')
+
     this.opts = extend(<Rabbitr.IOptions>{
       url: '',
       queuePrefix: '',
