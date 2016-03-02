@@ -13,6 +13,6 @@
     "when": "github:DefinitelyTyped/DefinitelyTyped/when/when.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94"
   },
   "dependencies": {
-    "merge": "github:louy/typed-merge#95d803b2b86a03742039bac4b43e20f86abb79ca"
+    "object-assign": "github:louy/typed-object-assign#91dd2548172cee5dc0aa531d1b452a76044dbff2"
   }
 }

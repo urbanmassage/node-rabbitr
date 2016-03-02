@@ -2,11 +2,10 @@ import async = require('async');
 import chalk = require('chalk');
 import {EventEmitter} from 'events';
 import amqplib = require('amqplib/callback_api');
-import merge = require('merge');
+import objectAssign = require('object-assign');
+import shortId = require('shortid');
 
 const debug = require('debug')('rabbitr');
-const extend = require('util')._extend;
-const shortId = require('shortid');
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
@@ -65,7 +64,7 @@ class Rabbitr extends EventEmitter {
 
     console.warn('Rabbitr has a major breaking change in version 8 - rpcListener queues are no longer durable. You will need to remove all rpcListener queues from RabbitMQ during deployment.')
 
-    this.opts = extend(<Rabbitr.IOptions>{
+    this.opts = objectAssign(<Rabbitr.IOptions>{
       url: '',
       queuePrefix: '',
       setup: call,
@@ -73,7 +72,7 @@ class Rabbitr extends EventEmitter {
       autoAckOnTimeout: null,
       defaultRPCExpiry: DEFAULT_RPC_EXPIRY,
     }, opts);
-    this.opts.connectionOpts = extend({
+    this.opts.connectionOpts = objectAssign({
       heartbeat: 1
     }, opts && opts.connectionOpts || {});
 
@@ -357,7 +356,7 @@ class Rabbitr extends EventEmitter {
 
       this._openChannels.push(channel);
 
-      channel.assertQueue(this._formatName(topic), merge({
+      channel.assertQueue(this._formatName(topic), objectAssign({
         durable: true,
       }, options), (err, ok) => {
         // istanbul ignore next
