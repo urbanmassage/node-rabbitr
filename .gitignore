@@ -4,5 +4,6 @@ coverage/
 
 *.js
 *.log
+index.d.ts
 
 typings/

@@ -1,16 +1,16 @@
 {
   "ambientDependencies": {
     "amqplib": "github:DefinitelyTyped/DefinitelyTyped/amqplib/amqplib.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94",
-    "async": "github:DefinitelyTyped/DefinitelyTyped/async/async.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
-    "chalk": "github:DefinitelyTyped/DefinitelyTyped/chalk/chalk.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
-    "debug": "github:DefinitelyTyped/DefinitelyTyped/debug/debug.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
-    "node": "github:DefinitelyTyped/DefinitelyTyped/node/node.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94",
-    "shortid": "github:DefinitelyTyped/DefinitelyTyped/shortid/shortid.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
-    "when": "github:DefinitelyTyped/DefinitelyTyped/when/when.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94"
+    "node": "github:DefinitelyTyped/DefinitelyTyped/node/node.d.ts#48c1e3c1d6baefa4f1a126f188c27c4fefd36bff"
   },
   "ambientDevDependencies": {
+    "async": "github:DefinitelyTyped/DefinitelyTyped/async/async.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
     "chai": "github:DefinitelyTyped/DefinitelyTyped/chai/chai.d.ts#9c25433c84251bfe72bf0030a95edbbb2c81c9d5",
-    "mocha": "github:DefinitelyTyped/DefinitelyTyped/mocha/mocha.d.ts#d6dd320291705694ba8e1a79497a908e9f5e6617"
+    "chalk": "github:DefinitelyTyped/DefinitelyTyped/chalk/chalk.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
+    "debug": "github:DefinitelyTyped/DefinitelyTyped/debug/debug.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
+    "mocha": "github:DefinitelyTyped/DefinitelyTyped/mocha/mocha.d.ts#d6dd320291705694ba8e1a79497a908e9f5e6617",
+    "shortid": "github:DefinitelyTyped/DefinitelyTyped/shortid/shortid.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
+    "when": "github:DefinitelyTyped/DefinitelyTyped/when/when.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94"
   },
   "dependencies": {
     "merge": "github:louy/typed-merge#95d803b2b86a03742039bac4b43e20f86abb79ca"

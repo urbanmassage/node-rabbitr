@@ -11,7 +11,8 @@
     "postcoverage": "if [ -f coverage/lcov.info ]; then node node_modules/.bin/map-coverage && mv coverage/lcov.info coverage/lcov-raw.info && mv coverage/lcov-mapped.info coverage/lcov.info; fi",
     "sendcoverage": "if [ -f coverage/lcov.info ]; then cat ./coverage/lcov.info | ./node_modules/codecov.io/bin/codecov.io.js; fi",
     "preversion": "npm run test -- --bail",
-    "postversion": "git push --follow-tags"
+    "postversion": "git push --follow-tags",
+    "declaration": "mkdir -p dist && tsc typings/main.d.ts index.ts --outDir dist/ --declaration --module commonjs --target es5 && mv dist/index.d.ts ./ && rm -rf dist/"
   },
   "author": "Giles Williams",
   "license": "ISC",
