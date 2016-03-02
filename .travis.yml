@@ -8,8 +8,7 @@ node_js:
 services:
 - rabbitmq
 script:
-- npm i -g typings
-- typings install
+- npm run typings
 - npm run build
 - npm test
 after_success:

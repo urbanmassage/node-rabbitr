@@ -4,7 +4,8 @@
   "description": "RabbitMQ made easy for nodejs",
   "main": "index",
   "scripts": {
-    "build": "node_modules/.bin/tsc -p .",
+    "typings": "typings install",
+    "build": "tsc -p .",
     "test": "mocha -gc",
     "coverage": "istanbul cover _mocha --",
     "postcoverage": "if [ -f coverage/lcov.info ]; then node node_modules/.bin/map-coverage && mv coverage/lcov.info coverage/lcov-raw.info && mv coverage/lcov-mapped.info coverage/lcov.info; fi",
@@ -28,8 +29,8 @@
     "istanbul": "^0.4.0",
     "map-coverage": "0.0.3",
     "mocha": "^2.3.4",
-    "typescript": "^1.8.0",
-    "typings": "^0.6.5",
+    "typescript": "^1.8.7",
+    "typings": "^0.6.8",
     "uuid": "^2.0.1"
   },
   "typings": "index.d.ts",
