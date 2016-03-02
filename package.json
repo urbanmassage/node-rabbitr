@@ -28,7 +28,7 @@
     "istanbul": "^0.4.0",
     "map-coverage": "0.0.3",
     "mocha": "^2.3.4",
-    "typescript": "^1.8.0",
+    "typescript": "^1.8.7",
     "typings": "^0.6.5",
     "uuid": "^2.0.1"
   },
