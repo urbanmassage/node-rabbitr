@@ -23,7 +23,7 @@ function stringify(obj: any): string {
 }
 
 // helper function to properly stringify an error object
-function stringifyError(err, filter, space) {
+function stringifyError(err, filter?, space?) {
   var plainObject = {
     stack: err.stack,
   };
