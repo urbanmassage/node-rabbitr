@@ -22,6 +22,17 @@ function stringify(obj: any): string {
   return JSON.stringify(obj);
 }
 
+// helper function to properly stringify an error object
+function stringifyError(err, filter, space) {
+  var plainObject = {
+    stack: err.stack,
+  };
+  Object.getOwnPropertyNames(err).forEach(function(key) {
+    plainObject[key] = err[key];
+  });
+  return JSON.stringify(plainObject, filter, space);
+}
+
 function parse(json: string): any {
   return JSON.parse(json, function(key, value) {
     return value && value.type === 'Buffer'
@@ -759,7 +770,7 @@ class Rabbitr extends EventEmitter {
 
           var isError = err instanceof Error;
           var errJSON = isError ?
-            JSON.stringify(err, Object.keys(err).concat(['name', 'type', 'arguments', 'stack', 'message'])) :
+            stringifyError(err) :
             JSON.stringify(err);
 
           // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
