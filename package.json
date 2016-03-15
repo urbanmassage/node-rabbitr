@@ -17,7 +17,7 @@
   "author": "Giles Williams",
   "license": "ISC",
   "dependencies": {
-    "amqplib": "^0.4.0",
+    "amqplib": "^0.4.1",
     "async": "^1.5.1",
     "chalk": "^1.1.1",
     "debug": "^2.2.0",
