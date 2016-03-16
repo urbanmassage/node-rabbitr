@@ -47,8 +47,9 @@ const call = (cb: Function) => cb();
 class TimeoutError extends Error {
   topic: string;
   name = 'TimeoutError';
+  message = 'Request timed out';
   constructor(details: { topic?: string } = {}) {
-    super('Request timed out');
+    super();
     this.topic = details.topic;
   }
 }
