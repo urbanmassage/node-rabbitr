@@ -762,7 +762,9 @@ class Rabbitr extends EventEmitter {
         var _cb: Rabbitr.Callback<TOutput> = (err?: Error, response?: TOutput): void => {
           // istanbul ignore next
           if (err) {
-            debug(chalk.cyan('rpcListener') + ' ' + chalk.red('hit error'), err);
+            debug(`${chalk.cyan('rpcListener')} ${chalk.red('hit error')}`, err);
+          } else {
+            debug(`${chalk.cyan('rpcListener')} responding to topic ${topic} with`, response);
           }
 
           // ack here - this will get ignored if the executor has acked or nacked already anyway
