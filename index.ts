@@ -47,11 +47,11 @@ const call = (cb: Function) => cb();
 class TimeoutError extends Error {
   topic: string;
   name = 'TimeoutError';
-  message = 'Request timed out';
   constructor(details: { topic?: string } = {}) {
     super();
-    (Error as any).captureStackTrace(this, this.constructor)
     this.topic = details.topic;
+    this.message = `RPC request timed out on topic ${this.topic}`;
+    (Error as any).captureStackTrace(this, this.constructor)
   }
 }
 
