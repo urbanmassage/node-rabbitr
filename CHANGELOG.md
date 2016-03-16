@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 8.0.8
+- made `TimeoutError` more useful by adding the topic to the error message and fixing an issue with stack being missing.
+
 ## 8.0.6
 - use `object-assign` instead of `merge`.
 
