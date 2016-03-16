@@ -50,6 +50,7 @@ class TimeoutError extends Error {
   message = 'Request timed out';
   constructor(details: { topic?: string } = {}) {
     super();
+    (Error as any).captureStackTrace(this, this.constructor)
     this.topic = details.topic;
   }
 }
