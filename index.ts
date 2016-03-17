@@ -55,6 +55,8 @@ class TimeoutError extends Error {
   }
 }
 
+let HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = false;
+
 class Rabbitr extends EventEmitter {
   opts: Rabbitr.IOptions;
 
@@ -69,7 +71,10 @@ class Rabbitr extends EventEmitter {
   constructor(opts: Rabbitr.IOptions) {
     super();
 
-    console.warn('Rabbitr has a major breaking change in version 8 - rpcListener queues are no longer durable. You will need to remove all rpcListener queues from RabbitMQ during deployment.')
+    if (!HAS_WARNED_ABOUT_V8_BREAKING_CHANGE) {
+      console.warn('Rabbitr has a major breaking change in version 8 - rpcListener queues are no longer durable. You will need to remove all rpcListener queues from RabbitMQ during deployment.')
+      HAS_WARNED_ABOUT_V8_BREAKING_CHANGE =  true;
+    }
 
     this.opts = objectAssign(<Rabbitr.IOptions>{
       url: '',
