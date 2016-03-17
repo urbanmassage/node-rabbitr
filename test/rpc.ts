@@ -6,20 +6,12 @@ describe('rabbitr#rpc', function() {
   const rabbit = new Rabbitr({
     url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
   });
+
   before((done) => rabbit.whenReady(done));
+  after(done => rabbit.destroy(done));
 
   it('should receive messages on rpcListener', function(done) {
     const queueName = uuid.v4() + '.rpc_test';
-
-    after(function(done) {
-      // cleanup
-      rabbit._cachedChannel.deleteExchange('rpc.'+queueName);
-      rabbit._cachedChannel.deleteQueue('rpc.'+queueName);
-      rabbit._cachedChannel.deleteExchange('rpc.'+queueName+'.return');
-
-      // give rabbit time enough to perform cleanup
-      setTimeout(done, 500);
-    });
 
     const testData = {
       testProp: 'rpc-example-data-' + queueName

@@ -8,21 +8,14 @@ describe('rabbitr#setTimer', function() {
   const rabbit = new Rabbitr({
     url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
   });
+
   before((done) => rabbit.whenReady(done));
+  after(done => rabbit.destroy(done));
 
   it('should receive a message after a set number of milliseconds', function(done) {
     const DELAY = 50;
 
     const queueName = uuid.v4() + '.timer_test';
-
-    after(function(done) {
-      // cleanup
-      rabbit._cachedChannel.deleteExchange(queueName);
-      rabbit._cachedChannel.deleteQueue(queueName);
-
-      // give rabbit time enough to perform cleanup
-      setTimeout(done, 50);
-    });
 
     const start = new Date().getTime();
 
@@ -51,15 +44,6 @@ describe('rabbitr#setTimer', function() {
     const DELAY = 50;
 
     const queueName = uuid.v4() + '.clear_timer_test';
-
-    after(function(done) {
-      // cleanup
-      rabbit._cachedChannel.deleteExchange(queueName);
-      rabbit._cachedChannel.deleteQueue(queueName);
-
-      // give rabbit time enough to perform cleanup
-      setTimeout(done, 50);
-    });
 
     const testData = {
       testProp: 'timed-example-data-' + queueName

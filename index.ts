@@ -68,6 +68,11 @@ class Rabbitr extends EventEmitter {
 
   protected connection: amqplib.Connection;
 
+  // We use separate channels for reading and writing because using the same channel has an impact on performance.
+  private opChannel: amqplib.Channel;
+  private readChannel: amqplib.Channel;
+  private writeChannel: amqplib.Channel;
+
   constructor(opts: Rabbitr.IOptions) {
     super();
 
@@ -93,78 +98,57 @@ class Rabbitr extends EventEmitter {
       throw new Error('Missing `url` in Rabbitr options');
     }
 
-    this._openChannels = [];
-
     this._connect();
   }
-
-  private _openChannels: amqplib.Channel[];
-
-  private _timerChannel: amqplib.Channel;
-  private _publishChannel: amqplib.Channel;
-  private _rpcReturnChannel: amqplib.Channel;
-  _cachedChannel: amqplib.Channel;
 
   private _connect() {
     debug('#connect');
 
     debug('using connection url', this.opts.url);
 
-    amqplib.connect(this.opts.url, this.opts.connectionOpts, (err: Error, conn: amqplib.Connection): void => {
+    amqplib.connect(this.opts.url, this.opts.connectionOpts, (err: Error, connection: amqplib.Connection): void => {
       // istanbul ignore next
       if (err) {
         throw err;
       }
 
       // make sure to close the connection if the process terminates
-      let close = () => conn.close();
+      let close = () => connection.close();
       process.once('SIGINT', close);
 
-      conn.on('close', () => {
+      connection.on('close', () => {
         process.removeListener('SIGINT', close);
         throw new Error('Disconnected from RabbitMQ');
       });
 
-      conn.createChannel((err: Error, channel: amqplib.Channel): void => {
-        // istanbul ignore next
+      // open multiple channels in parallel
+      async.times<amqplib.Channel>(3, (i, cb) => connection.createChannel(cb), (err, channels) => {
         if (err) {
+          // If we get an error at this point we should probably crash the process.
           throw err;
         }
 
-        this._timerChannel = channel;
-        this._publishChannel = channel;
-        this._cachedChannel = channel;
+        // save all channels
+        [this.opChannel, this.readChannel, this.writeChannel] = channels;
 
-        this._openChannels.push(channel);
 
-        conn.createChannel((err: Error, channel: amqplib.Channel): void => {
-          // istanbul ignore next
-          if (err) {
-            throw err;
-          }
+        // store the connection and do all the setup work
+        this.connection = connection;
+        this.connected = true;
 
-          this._rpcReturnChannel = channel;
+        // istanbul ignore next
+        if (this.doneSetup) {
+          this._afterSetup();
+        } else {
+          this.opts.setup((err: Error) => {
+            // istanbul ignore next
+            if (err) throw err;
 
-          this._openChannels.push(channel);
+            this.doneSetup = true;
 
-          // cache the connection and do all the setup work
-          this.connection = conn;
-          this.connected = true;
-
-          // istanbul ignore next
-          if (this.doneSetup) {
             this._afterSetup();
-          } else {
-            this.opts.setup((err: Error) => {
-              // istanbul ignore next
-              if (err) throw err;
-
-              this.doneSetup = true;
-
-              this._afterSetup();
-            });
-          }
-        });
+          });
+        }
       });
     });
   }
@@ -200,7 +184,7 @@ class Rabbitr extends EventEmitter {
   // method to destroy anything for this instance of rabbitr
   destroy(cb?: Rabbitr.ErrorCallback): void {
     debug('destroying');
-    async.each(this._openChannels, (channel, next) => {
+    async.each([this.opChannel, this.readChannel, this.writeChannel, ...this.subscribeChannels], (channel, next) => {
       channel.close(err => {
         // istanbul ignore next
         if (err) {
@@ -213,19 +197,23 @@ class Rabbitr extends EventEmitter {
     }, err => {
       // istanbul ignore next
       if (err) {
-        if (cb) cb(err);
-        return;
+        debug(`${chalk.cyan('destroy')} ${chalk.red('hit error')}`, err);
+        if (cb) return cb(err);
+        throw err;
       }
+
+      debug(`${chalk.cyan('destroy')} closing connection`);
 
       this.connection.close(err => {
         // istanbul ignore next
         if (err) {
-          debug('Error while closing connection', err);
-          if (cb) cb(err);
-          return;
+          debug(`${chalk.cyan('destroy')} ${chalk.red('hit error')}`, err);
+          if (cb) return cb(err);
+          throw err;
         }
         debug('connection closed');
         this.removeAllListeners();
+        this.ready = false;
         if (cb) cb(null);
       });
     });
@@ -247,13 +235,15 @@ class Rabbitr extends EventEmitter {
 
     debug(chalk.yellow('send'), topic, data, opts);
 
-    this._publishChannel.assertExchange(this._formatName(topic), 'topic', {}, () => {
-      this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
-        contentType: 'application/json'
-      });
-
-      if (cb) cb(null);
-    });
+    const exchange = this._formatName(topic);
+    async.series([
+      cb =>
+        this.opChannel.assertExchange(exchange, 'topic', {}, cb),
+      cb =>
+        this.writeChannel.publish(exchange, '*', new Buffer(stringify(data)), {
+          contentType: 'application/json'
+        }) && 0 || cb(null),
+    ], cb);
   }
 
   on(topic: string, cb: (data: Rabbitr.IMessage<any>) => void): this;
@@ -261,6 +251,8 @@ class Rabbitr extends EventEmitter {
 
   /** @private */
   on(topic: string, cb: (data: Rabbitr.IEnvelopedMessage<any>) => void): this;
+
+  private subscribeChannels: amqplib.Channel[] = [];
 
   subscribe(topic: string, cb?: Rabbitr.Callback<any>): void;
   subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): void;
@@ -286,25 +278,20 @@ class Rabbitr extends EventEmitter {
 
     debug(chalk.cyan('subscribe'), topic, options);
 
-    this.connection.createChannel((err: Error, channel: amqplib.Channel): void => {
-      // istanbul ignore next
-      if (err) {
-        this.emit('error', err);
-        if (cb) cb(err);
-        return;
-      }
-
-      this._openChannels.push(channel);
-
-      channel.assertQueue(this._formatName(topic), objectAssign({
-        durable: true,
-      }, options), (err, ok) => {
-        // istanbul ignore next
-        if (err) {
-          if (cb) cb(err);
-          return;
-        }
-
+    let channel: amqplib.Channel;
+    async.series([
+      cb =>
+        this.opChannel.assertQueue(this._formatName(topic), objectAssign({
+          durable: true,
+        }, options), cb),
+      cb => {
+        this.connection.createChannel((err: Error, _channel: amqplib.Channel): void => {
+          channel = _channel;
+          cb(err);
+        });
+      },
+      cb => {
+        this.subscribeChannels.push(channel);
         channel.prefetch(options ? options.prefetch || 1 : 1);
 
         const processMessage = (msg: any) => {
@@ -372,17 +359,12 @@ class Rabbitr extends EventEmitter {
           });
         };
 
-        channel.consume(this._formatName(topic), processMessage, {}, (err: Error/*, ok*/) => {
-          // istanbul ignore next
-          if (err) {
-            this.emit('error', err);
-            if (cb) cb(err);
-            return;
-          }
-
-          if (cb) cb(null);
-        });
-      });
+        const queue = this._formatName(topic);
+        channel.consume(queue, processMessage, {}, cb);
+      },
+    ], error => {
+      if (error) this.emit('error', error);
+      if (cb) cb(error);
     });
   }
 
@@ -439,31 +421,27 @@ class Rabbitr extends EventEmitter {
 
     debug(chalk.yellow('setTimer'), topic, uniqueID, data);
 
-    this._timerChannel.assertQueue(this._formatName(timerQueue), {
-      durable: true,
-      deadLetterExchange: this._formatName(topic),
-      arguments: {
-        'x-dead-letter-routing-key': '*'
-      },
-      expires: (ttl + 1000)
-    }, err => {
-      // istanbul ignore next
-      if (err) {
-        this.emit('error', err);
-        if (cb) cb(err);
-        return;
-      }
-
-      this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
-        contentType: 'application/json',
-        // TODO - should we do anything with this?
-        expiration: ttl + '',
-      });
-
-      process.nextTick(function() {
-        if (cb) cb(null);
-      });
+    async.series([
+      cb =>
+        this.writeChannel.assertQueue(this._formatName(timerQueue), {
+          durable: true,
+          deadLetterExchange: this._formatName(topic),
+          arguments: {
+            'x-dead-letter-routing-key': '*'
+          },
+          expires: (ttl + 1000)
+        }, cb),
+      cb =>
+        this.writeChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
+          contentType: 'application/json',
+          // TODO - should we do anything with this?
+          expiration: ttl + '',
+        }) && 0 || cb(null),
+    ], error => {
+      if (error) this.emit('error', error);
+      if (cb) cb(error);
     });
+
   }
 
   clearTimer(topic: string, uniqueID: string, cb?: Rabbitr.ErrorCallback) {
@@ -482,7 +460,7 @@ class Rabbitr extends EventEmitter {
     try {
       // For some reason we get an error thrown here.
       // TODO - investigate
-      this._timerChannel.deleteQueue(timerQueue, {}, (err: Error) => {
+      this.opChannel.deleteQueue(timerQueue, {}, (err: Error) => {
         if (cb) cb(err);
       });
     } // istanbul ignore next
@@ -528,9 +506,7 @@ class Rabbitr extends EventEmitter {
     // bind the response queue
     let processed = false;
 
-    const channel = this._rpcReturnChannel;
-
-    channel.assertQueue(this._formatName(returnQueueName), {
+    this.readChannel.assertQueue(this._formatName(returnQueueName), {
       exclusive: true,
       expires: (this.opts.defaultRPCExpiry * 1 + 1000),
       durable: false,
@@ -540,7 +516,7 @@ class Rabbitr extends EventEmitter {
     const cleanup = () => {
       // delete the return queue and close exc channel
       try {
-        channel.deleteQueue(this._formatName(returnQueueName), noop);
+        this.readChannel.deleteQueue(this._formatName(returnQueueName), noop);
       }
       // istanbul ignore next
       catch (e) {
@@ -595,7 +571,7 @@ class Rabbitr extends EventEmitter {
       cleanup();
     };
 
-    channel.consume(this._formatName(returnQueueName), processMessage, {
+    this.readChannel.consume(this._formatName(returnQueueName), processMessage, {
       noAck: true
     }, err => {
       // istanbul ignore next
@@ -611,7 +587,7 @@ class Rabbitr extends EventEmitter {
         returnQueue: this._formatName(returnQueueName),
         expiration: now + timeoutMS
       };
-      this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(obj)), {
+      this.writeChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(obj)), {
         contentType: 'application/json',
         expiration: timeoutMS + ''
       });
@@ -670,7 +646,7 @@ class Rabbitr extends EventEmitter {
         var _cb: Rabbitr.Callback<TOutput> = (err?: Error, response?: TOutput): void => {
           // istanbul ignore next
           if (err) {
-            debug(`${chalk.cyan('rpcListener')} ${chalk.red('hit error')}`, err);
+            debug(`${chalk.cyan('rpcListener')} ${chalk.red('error')} in response to topic ${topic}`, err);
           } else {
             debug(`${chalk.cyan('rpcListener')} responding to topic ${topic} with`, response);
           }
@@ -684,13 +660,13 @@ class Rabbitr extends EventEmitter {
             JSON.stringify(err);
 
           // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
-          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify({
+          this.writeChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify({
             error: err ? errJSON : undefined,
-            isError: isError,
-            response: response,
+            isError,
+            response,
           })), {
-              contentType: 'application/json'
-            });
+            contentType: 'application/json'
+          });
         };
 
         function _runExecutor() {

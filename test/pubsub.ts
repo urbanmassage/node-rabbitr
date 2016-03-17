@@ -1,4 +1,4 @@
-import Rabbitr = require('../');
+import Rabbitr = require('../index');
 import {expect} from 'chai';
 const uuid = require('uuid');
 
@@ -6,20 +6,13 @@ describe('rabbitr#pubsub', function() {
   const rabbit = new Rabbitr({
     url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
   });
+
   before((done) => rabbit.whenReady(done));
+  after(done => rabbit.destroy(done));
 
   it('should receive messages on the specified queue', function(done) {
     const exchangeName = uuid.v4() + '.pubsub_test';
     const queueName = uuid.v4() + '.pubsub_test';
-
-    after(function(done) {
-      // cleanup
-      rabbit._cachedChannel.deleteExchange(exchangeName);
-      rabbit._cachedChannel.deleteQueue(queueName);
-
-      // give rabbit time enough to perform cleanup
-      setTimeout(done, 50);
-    });
 
     const testData = {
       testProp: 'pubsub-example-data-' + queueName
@@ -43,15 +36,6 @@ describe('rabbitr#pubsub', function() {
   it('passes Buffers', function(done) {
     const exchangeName = uuid.v4() + '.pubsub_buf_test';
     const queueName = uuid.v4() + '.pubsub_buf_test';
-
-    after(function(done) {
-      // cleanup
-      rabbit._cachedChannel.deleteExchange(exchangeName);
-      rabbit._cachedChannel.deleteQueue(queueName);
-
-      // give rabbit time enough to perform cleanup
-      setTimeout(done, 50);
-    });
 
     const data = 'Hello world!';
 
