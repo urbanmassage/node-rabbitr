@@ -61,13 +61,7 @@ class Rabbitr extends EventEmitter {
   protected ready = false;
   protected doneSetup = false;
   protected connected = false;
-  subscribeQueue = new Array<{ topic: string, opts?: Rabbitr.ISubscribeOptions, cb: Rabbitr.Callback<any> }>();
-  bindingsQueue = new Array<{ exchange: string, queue: string, cb: Rabbitr.ErrorCallback }>();
-  sendQueue = new Array<{ topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions }>();
-  setTimerQueue = new Array<{ topic: string, uniqueID: string, data: any, ttl: number, cb?: Rabbitr.ErrorCallback }>();
-  clearTimerQueue = new Array<{ topic: string, uniqueID: string, cb: Rabbitr.ErrorCallback }>();
-  rpcListenerQueue = new Array<{ topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor?: Rabbitr.IRpcListenerExecutor<any, any> }>();
-  rpcExecQueue = new Array<{ topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb: Rabbitr.Callback<any> }>();
+
   middleware = new Array<Rabbitr.Middleware>();
 
   protected connection: amqplib.Connection;
@@ -173,72 +167,7 @@ class Rabbitr extends EventEmitter {
   private _afterSetup() {
     this.ready = true;
 
-    debug('ready and has queue sizes', this.subscribeQueue.length, this.bindingsQueue.length, this.rpcListenerQueue.length, this.sendQueue.length, this.rpcExecQueue.length);
-    for (var i = 0; i < this.subscribeQueue.length; i++) {
-      // istanbul ignore next
-      this.subscribe(
-        this.subscribeQueue[i].topic,
-        this.subscribeQueue[i].opts,
-        this.subscribeQueue[i].cb
-      );
-    }
-    this.subscribeQueue = [];
-    for (var i = 0; i < this.bindingsQueue.length; i++) {
-      // istanbul ignore next
-      this.bindExchangeToQueue(
-        this.bindingsQueue[i].exchange,
-        this.bindingsQueue[i].queue,
-        this.bindingsQueue[i].cb
-      );
-    }
-    this.bindingsQueue = [];
-    for (var i = 0; i < this.rpcListenerQueue.length; i++) {
-      // istanbul ignore next
-      this.rpcListener(
-        this.rpcListenerQueue[i].topic,
-        this.rpcListenerQueue[i].opts,
-        this.rpcListenerQueue[i].executor
-      );
-    }
-    this.rpcListenerQueue = [];
-
-    // send anything in send queue but clear it after
-    for (var i = 0; i < this.sendQueue.length; i++) {
-      // istanbul ignore next
-      this.send(
-        this.sendQueue[i].topic,
-        this.sendQueue[i].data,
-        this.sendQueue[i].cb,
-        this.sendQueue[i].opts
-      );
-    }
-    this.sendQueue = [];
-
-    // send anything in setTimer queue but clear it after
-    for (var i = 0; i < this.setTimerQueue.length; i++) {
-      // istanbul ignore next
-      this.setTimer(this.setTimerQueue[i].topic, this.setTimerQueue[i].uniqueID, this.setTimerQueue[i].data, this.setTimerQueue[i].ttl, this.setTimerQueue[i].cb);
-    }
-    this.setTimerQueue = [];
-
-    // send anything in clearTimer queue but clear it after
-    for (var i = 0; i < this.clearTimerQueue.length; i++) {
-      // istanbul ignore next
-      this.clearTimer(this.clearTimerQueue[i].topic, this.clearTimerQueue[i].uniqueID, this.clearTimerQueue[i].cb);
-    }
-    this.clearTimerQueue = [];
-
-    // send anything in rpcExec queue but clear it after
-    for (var i = 0; i < this.rpcExecQueue.length; i++) {
-      // istanbul ignore next
-      this.rpcExec(
-        this.rpcExecQueue[i].topic,
-        this.rpcExecQueue[i].data,
-        this.rpcExecQueue[i].opts,
-        this.rpcExecQueue[i].cb
-      );
-    }
-    this.rpcExecQueue = [];
+    debug('ready and has ready queue size', this.readyQueue.length);
 
     while (this.readyQueue.length) {
       // istanbul ignore next
@@ -305,14 +234,10 @@ class Rabbitr extends EventEmitter {
   send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void {
     // istanbul ignore next
     if (!this.ready) {
-      debug('adding item to send queue');
-      this.sendQueue.push({
-        topic,
-        data,
-        cb,
-        opts,
+      // delay until ready
+      return this.whenReady(() => {
+        this.send(topic, data, cb, opts);
       });
-      return;
     }
 
     debug(chalk.yellow('send'), topic, data, opts);
@@ -346,13 +271,10 @@ class Rabbitr extends EventEmitter {
 
     // istanbul ignore next
     if (!this.ready) {
-      debug('adding item to sub queue');
-      this.subscribeQueue.push({
-        topic,
-        opts,
-        cb,
+      // delay until ready
+      return this.whenReady(() => {
+        this.subscribe(topic, opts, cb);
       });
-      return;
     }
 
     const options: Rabbitr.ISubscribeOptions = opts;
@@ -462,13 +384,10 @@ class Rabbitr extends EventEmitter {
   bindExchangeToQueue(exchange: string, queue: string, cb?: Rabbitr.ErrorCallback) {
     // istanbul ignore next
     if (!this.ready) {
-      debug('adding item to bindings queue');
-      this.bindingsQueue.push({
-        exchange,
-        queue,
-        cb,
+      // delay until ready
+      return this.whenReady(() => {
+        this.bindExchangeToQueue(exchange, queue, cb);
       });
-      return;
     }
 
     debug(chalk.cyan('bindExchangeToQueue'), exchange, queue);
@@ -505,16 +424,10 @@ class Rabbitr extends EventEmitter {
   setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback) {
     // istanbul ignore next
     if (!this.ready) {
-      debug('adding item to setTimer queue');
-      this.setTimerQueue.push({
-        topic,
-        uniqueID,
-        data,
-        ttl,
-        cb,
+      // delay until ready
+      return this.whenReady(() => {
+        this.setTimer(topic, uniqueID, data, ttl, cb);
       });
-
-      return;
     }
 
     var timerQueue = this._timerQueueName(topic, uniqueID);
@@ -551,14 +464,10 @@ class Rabbitr extends EventEmitter {
   clearTimer(topic: string, uniqueID: string, cb?: Rabbitr.ErrorCallback) {
     // istanbul ignore next
     if (!this.ready) {
-      debug('adding item to clearTimer queue');
-      this.clearTimerQueue.push({
-        topic,
-        uniqueID: uniqueID,
-        cb: cb
+      // delay until ready
+      return this.whenReady(() => {
+        this.clearTimer(topic, uniqueID, cb);
       });
-
-      return;
     }
 
     var timerQueue = this._timerQueueName(topic, uniqueID);
@@ -589,23 +498,18 @@ class Rabbitr extends EventEmitter {
 
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>) {
     // istanbul ignore next
+    if (!this.ready) {
+      // delay until ready
+      return this.whenReady(() => {
+        this.rpcExec(topic, data, opts, cb);
+      });
+    }
+
+    // istanbul ignore next
     if ('function' === typeof opts) {
       // shift arguments
       cb = <Rabbitr.Callback<TOutput>>opts;
       opts = <Rabbitr.IRpcExecOptions>{};
-    }
-
-    // istanbul ignore next
-    if (!this.ready) {
-      debug('adding item to rpcExec queue');
-      this.rpcExecQueue.push({
-        topic,
-        data,
-        opts,
-        cb,
-      });
-
-      return;
     }
 
     // this will send the data down the topic and then open up a unique return queue
@@ -716,21 +620,18 @@ class Rabbitr extends EventEmitter {
 
   rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void {
     // istanbul ignore next
+    if (!this.ready) {
+      // delay until ready
+      return this.whenReady(() => {
+        this.rpcListener(topic, opts, executor);
+      });
+    }
+
+    // istanbul ignore next
     if ('function' === typeof opts) {
       // shift arguments
       executor = <Rabbitr.IRpcListenerExecutor<TInput, TOutput>>opts;
       opts = <Rabbitr.IRpcListenerOptions<TInput, TOutput>>{};
-    }
-
-    // istanbul ignore next
-    if (!this.ready) {
-      debug('adding item to rpcListener queue');
-      this.rpcListenerQueue.push({
-        topic,
-        executor: executor,
-        opts: opts
-      });
-      return;
     }
 
     var rpcQueue = this._rpcQueueName(topic);
