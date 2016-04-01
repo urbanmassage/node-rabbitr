@@ -1,6 +1,5 @@
 {
   "ambientDependencies": {
-    "amqplib": "github:DefinitelyTyped/DefinitelyTyped/amqplib/amqplib.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94",
     "node": "github:DefinitelyTyped/DefinitelyTyped/node/node.d.ts#48c1e3c1d6baefa4f1a126f188c27c4fefd36bff"
   },
   "ambientDevDependencies": {
@@ -13,6 +12,8 @@
     "when": "github:DefinitelyTyped/DefinitelyTyped/when/when.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94"
   },
   "dependencies": {
+    "amqplib": "github:louy/typed-amqplib#9c1cccc22621c4dcba6f551023928a14be5b5496",
+    "bluebird": "github:louy/typed-bluebird",
     "object-assign": "github:louy/typed-object-assign#91dd2548172cee5dc0aa531d1b452a76044dbff2"
   }
 }
