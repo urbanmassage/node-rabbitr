@@ -227,7 +227,7 @@ class Rabbitr extends EventEmitter {
       this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
         contentType: 'application/json'
       });
-    });
+    }).asCallback(cb);
   }
 
   on(topic: string, cb: (data: Rabbitr.IMessage<any>) => void): this;
@@ -359,44 +359,42 @@ class Rabbitr extends EventEmitter {
     });
   }
 
-  bindExchangeToQueue(exchange: string, queue: string, cb?: Rabbitr.ErrorCallback) {
+  bindExchangeToQueue(exchange: string, queue: string, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
-        this.bindExchangeToQueue(exchange, queue, cb);
+        return this.bindExchangeToQueue(exchange, queue, cb);
       });
     }
 
     debug(chalk.cyan('bindExchangeToQueue'), exchange, queue);
 
-    this.connection.createChannel((err, channel) => {
+    return Bluebird.fromCallback<amqplib.Channel>(callback =>
+      this.connection.createChannel(callback)
+    ).catch(error => {
       // istanbul ignore next
-      if (err) {
-        this.emit('error', err);
-        if (cb) cb(err);
-        return;
-      }
-
+      this.emit('error', error);
+      throw error;
+    }).then(channel => {
       channel.assertQueue(this._formatName(queue));
       channel.assertExchange(this._formatName(exchange), 'topic');
 
-      channel.bindQueue(this._formatName(queue), this._formatName(exchange), '*', {}, (err, ok) => {
+      return Bluebird.fromCallback(callback =>
+        channel.bindQueue(this._formatName(queue), this._formatName(exchange), '*', {}, callback)
+      ).catch(error => {
         // istanbul ignore next
-        if (err) {
-          this.emit('error', err);
-          if (cb) cb(err);
-          return;
-        }
-
-        channel.close(cb);
+        this.emit('error', error);
+        throw error;
+      }).then(ok => {
+        return Bluebird.fromCallback(callback => channel.close(callback));
       });
-    });
+    }).asCallback(cb);
   };
 
   // timed queue stuff
   private _timerQueueName(topic: string, uniqueID: string): string {
-    return 'dlq.' + topic + '.' + uniqueID;
+    return `dlq.${topic}.${uniqueID}`;
   }
 
   setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback) {
@@ -466,7 +464,7 @@ class Rabbitr extends EventEmitter {
 
   // rpc stuff
   private _rpcQueueName(topic: string): string {
-    return 'rpc.' + topic;
+    return `rpc.${topic}`;
   }
 
   rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): void;
