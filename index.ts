@@ -207,26 +207,26 @@ class Rabbitr extends EventEmitter {
 
   // standard pub/sub stuff
 
-  send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
-  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
+  send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): Bluebird<void>;
 
-  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void {
+  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
-        this.send(topic, data, cb, opts);
+        return this.send(topic, data, cb, opts);
       });
     }
 
     debug(chalk.yellow('send'), topic, data, opts);
 
-    this._publishChannel.assertExchange(this._formatName(topic), 'topic', {}, () => {
+    return Bluebird.fromCallback(callback =>
+      this._publishChannel.assertExchange(this._formatName(topic), 'topic', {}, callback)
+    ).then(() => {
       this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
         contentType: 'application/json'
       });
-
-      if (cb) cb(null);
     });
   }
 
