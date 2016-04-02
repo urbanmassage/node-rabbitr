@@ -19,6 +19,7 @@
   "dependencies": {
     "amqplib": "^0.4.1",
     "async": "^1.5.1",
+    "bluebird": "^3.3.4",
     "chalk": "^1.1.1",
     "debug": "^2.2.0",
     "object-assign": "^4.0.1",

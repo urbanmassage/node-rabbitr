@@ -4,6 +4,7 @@ import {EventEmitter} from 'events';
 import amqplib = require('amqplib/callback_api');
 import objectAssign = require('object-assign');
 import shortId = require('shortid');
+import Bluebird = require('bluebird');
 
 const debug = require('debug')('rabbitr');
 
@@ -60,8 +61,9 @@ let HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = false;
 class Rabbitr extends EventEmitter {
   opts: Rabbitr.IOptions;
 
+  /** @deprecated */
   protected ready = false;
-  protected doneSetup = false;
+  /** @deprecated */
   protected connected = false;
 
   middleware = new Array<Rabbitr.Middleware>();
@@ -105,17 +107,16 @@ class Rabbitr extends EventEmitter {
   private _rpcReturnChannel: amqplib.Channel;
   _cachedChannel: amqplib.Channel;
 
+  private connectionPromise: Bluebird<amqplib.Connection>;
+
   private _connect() {
     debug('#connect');
 
     debug('using connection url', this.opts.url);
 
-    amqplib.connect(this.opts.url, this.opts.connectionOpts, (err: Error, conn: amqplib.Connection): void => {
-      // istanbul ignore next
-      if (err) {
-        throw err;
-      }
-
+    this.connectionPromise = Bluebird.fromCallback<amqplib.Connection>(callback =>
+      amqplib.connect(this.opts.url, this.opts.connectionOpts, callback)
+    ).then(conn => {
       // make sure to close the connection if the process terminates
       let close = () => conn.close();
       process.once('SIGINT', close);
@@ -125,24 +126,18 @@ class Rabbitr extends EventEmitter {
         throw new Error('Disconnected from RabbitMQ');
       });
 
-      conn.createChannel((err: Error, channel: amqplib.Channel): void => {
-        // istanbul ignore next
-        if (err) {
-          throw err;
-        }
-
+      return Bluebird.fromCallback<amqplib.Channel>(callback =>
+        conn.createChannel(callback)
+      ).then(channel => {
         this._timerChannel = channel;
         this._publishChannel = channel;
         this._cachedChannel = channel;
 
         this._openChannels.push(channel);
 
-        conn.createChannel((err: Error, channel: amqplib.Channel): void => {
-          // istanbul ignore next
-          if (err) {
-            throw err;
-          }
-
+        return Bluebird.fromCallback<amqplib.Channel>(callback =>
+          conn.createChannel(callback)
+        ).then(channel => {
           this._rpcReturnChannel = channel;
 
           this._openChannels.push(channel);
@@ -151,41 +146,23 @@ class Rabbitr extends EventEmitter {
           this.connection = conn;
           this.connected = true;
 
-          // istanbul ignore next
-          if (this.doneSetup) {
-            this._afterSetup();
-          } else {
-            this.opts.setup((err: Error) => {
-              // istanbul ignore next
-              if (err) throw err;
-
-              this.doneSetup = true;
-
-              this._afterSetup();
+          debug('ready');
+          return Bluebird.fromCallback(this.opts.setup)
+            .then(() => {
+              this.ready = true;
+              return conn;
             });
-          }
         });
       });
+    }).catch(function(error) {
+      // istanbul ignore next
+      process.nextTick(() => { throw error; });
     });
   }
 
-  private _afterSetup() {
-    this.ready = true;
-
-    debug('ready and has ready queue size', this.readyQueue.length);
-
-    while (this.readyQueue.length) {
-      // istanbul ignore next
-      this.readyQueue.shift()();
-    }
-  }
-
-  private readyQueue: Function[] = [];
-
   // istanbul ignore next
   public whenReady(callback: Function) {
-    if (this.ready) return callback();
-    this.readyQueue.push(callback);
+    return this.connectionPromise.then(() => void 0).asCallback(callback);
   }
 
   private _formatName(name: string) {
@@ -238,7 +215,7 @@ class Rabbitr extends EventEmitter {
 
   send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void {
     // istanbul ignore next
-    if (!this.ready) {
+    if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
         this.send(topic, data, cb, opts);
@@ -275,7 +252,7 @@ class Rabbitr extends EventEmitter {
     }
 
     // istanbul ignore next
-    if (!this.ready) {
+    if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
         this.subscribe(topic, opts, cb);
@@ -388,7 +365,7 @@ class Rabbitr extends EventEmitter {
 
   bindExchangeToQueue(exchange: string, queue: string, cb?: Rabbitr.ErrorCallback) {
     // istanbul ignore next
-    if (!this.ready) {
+    if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
         this.bindExchangeToQueue(exchange, queue, cb);
@@ -428,7 +405,7 @@ class Rabbitr extends EventEmitter {
 
   setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback) {
     // istanbul ignore next
-    if (!this.ready) {
+    if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
         this.setTimer(topic, uniqueID, data, ttl, cb);
@@ -468,7 +445,7 @@ class Rabbitr extends EventEmitter {
 
   clearTimer(topic: string, uniqueID: string, cb?: Rabbitr.ErrorCallback) {
     // istanbul ignore next
-    if (!this.ready) {
+    if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
         this.clearTimer(topic, uniqueID, cb);
@@ -503,7 +480,7 @@ class Rabbitr extends EventEmitter {
 
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>) {
     // istanbul ignore next
-    if (!this.ready) {
+    if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
         this.rpcExec(topic, data, opts, cb);
@@ -625,7 +602,7 @@ class Rabbitr extends EventEmitter {
 
   rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void {
     // istanbul ignore next
-    if (!this.ready) {
+    if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
         this.rpcListener(topic, opts, executor);
