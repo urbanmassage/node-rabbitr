@@ -397,12 +397,12 @@ class Rabbitr extends EventEmitter {
     return `dlq.${topic}.${uniqueID}`;
   }
 
-  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback) {
+  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
-        this.setTimer(topic, uniqueID, data, ttl, cb);
+        return this.setTimer(topic, uniqueID, data, ttl, cb);
       });
     }
 
@@ -410,31 +410,26 @@ class Rabbitr extends EventEmitter {
 
     debug(chalk.yellow('setTimer'), topic, uniqueID, data);
 
-    this._timerChannel.assertQueue(this._formatName(timerQueue), {
-      durable: true,
-      deadLetterExchange: this._formatName(topic),
-      arguments: {
-        'x-dead-letter-routing-key': '*'
-      },
-      expires: (ttl + 1000)
-    }, err => {
+    return Bluebird.fromCallback(callback =>
+      this._timerChannel.assertQueue(this._formatName(timerQueue), {
+        durable: true,
+        deadLetterExchange: this._formatName(topic),
+        arguments: {
+          'x-dead-letter-routing-key': '*'
+        },
+        expires: (ttl + 1000)
+      }, callback)
+    ).catch(error => {
       // istanbul ignore next
-      if (err) {
-        this.emit('error', err);
-        if (cb) cb(err);
-        return;
-      }
-
+      this.emit('error', error);
+      throw error;
+    }).then(() => {
       this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
         contentType: 'application/json',
         // TODO - should we do anything with this?
         expiration: ttl + '',
       });
-
-      process.nextTick(function() {
-        if (cb) cb(null);
-      });
-    });
+    }).asCallback(cb);
   }
 
   clearTimer(topic: string, uniqueID: string, cb?: Rabbitr.ErrorCallback) {
