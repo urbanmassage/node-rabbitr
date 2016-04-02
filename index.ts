@@ -236,12 +236,12 @@ class Rabbitr extends EventEmitter {
   /** @private */
   on(topic: string, cb: (data: Rabbitr.IEnvelopedMessage<any>) => void): this;
 
-  subscribe(topic: string, cb?: Rabbitr.Callback<any>): void;
-  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): void;
-  subscribe<TMessage>(topic: string, cb?: Rabbitr.Callback<TMessage>): void;
-  subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb: Rabbitr.Callback<TMessage>): void;
+  subscribe(topic: string, cb?: Rabbitr.Callback<any>): Bluebird<void>;
+  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): Bluebird<void>;
+  subscribe<TMessage>(topic: string, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
+  subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb: Rabbitr.Callback<TMessage>): Bluebird<void>;
 
-  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): void {
+  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     // istanbul ignore next
     if (!cb) {
       cb = <any>opts;
@@ -252,7 +252,7 @@ class Rabbitr extends EventEmitter {
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() => {
-        this.subscribe(topic, opts, cb);
+        return this.subscribe(topic, opts, cb);
       });
     }
 
@@ -260,25 +260,20 @@ class Rabbitr extends EventEmitter {
 
     debug(chalk.cyan('subscribe'), topic, options);
 
-    this.connection.createChannel((err: Error, channel: amqplib.Channel): void => {
+    return Bluebird.fromCallback<amqplib.Channel>(callback =>
+      this.connection.createChannel(callback)
+    ).catch(error => {
       // istanbul ignore next
-      if (err) {
-        this.emit('error', err);
-        if (cb) cb(err);
-        return;
-      }
-
+      this.emit('error', error);
+      throw error;
+    }).then(channel => {
       this._openChannels.push(channel);
 
-      channel.assertQueue(this._formatName(topic), objectAssign({
-        durable: true,
-      }, options), (err, ok) => {
-        // istanbul ignore next
-        if (err) {
-          if (cb) cb(err);
-          return;
-        }
-
+      return Bluebird.fromCallback(callback =>
+        channel.assertQueue(this._formatName(topic), objectAssign({
+          durable: true,
+        }, options), callback)
+      ).then(ok => {
         channel.prefetch(options ? options.prefetch || 1 : 1);
 
         const processMessage = (msg: any) => {
@@ -291,72 +286,76 @@ class Rabbitr extends EventEmitter {
 
           debug('got', topic, data);
 
-          var acked = false;
+          const messageAcknowledgement = new Bluebird((ack: () => void, reject) => {
+            const message: Rabbitr.IMessage<TMessage> = {
+              send: (topic, data, cb?, opts?) => this.send(topic, data, cb, opts),
+              rpcExec: (topic, data, opts, cb?) => this.rpcExec(topic, data, opts, cb),
+              topic,
+              data,
+              channel,
+              ack,
+              reject,
+            };
 
-          var ackedTimer = setTimeout(() => {
+            if (options && options.skipMiddleware) {
+              this.emit(topic, message);
+              return null;
+            }
+
+            Bluebird.fromCallback(callback =>
+              this._runMiddleware(message, callback)
+            ).then(() => {
+              // TODO - how to handle common error function thing for middleware?
+              this.emit(topic, message);
+              return null;
+            });
+          }).then(
+            // acknowledged
+            () => {
+              debug('acknowledging message', topic, data);
+              channel.ack(msg);
+            },
+            // rejected
+            error => {
+              debug('rejecting message', topic, data, error);
+              console.error(error && error.stack || error);
+              channel.nack(msg);
+            }
+          );
+
+          // Add a timeout
+          return Bluebird.race([
+            messageAcknowledgement,
+            Bluebird
+              .delay(this.opts.ackWarningTimeout)
+              .then(() => {
+                throw new TimeoutError();
+              }),
+          ]).catch(TimeoutError, error => {
             this.emit('warning', {
               type: 'ack.timeout',
               queue: topic,
-              message: data
+              message: data,
             });
 
             if (this.opts.autoAckOnTimeout === 'acknowledge') {
-              acked = true;
               channel.ack(msg);
             } else if (this.opts.autoAckOnTimeout === 'reject') {
-              acked = true;
               channel.nack(msg);
             }
-          }, this.opts.ackWarningTimeout);
-
-          const message: Rabbitr.IMessage<TMessage> = {
-            send: (topic, data, cb?, opts?) => this.send(topic, data, cb, opts),
-            rpcExec: (topic, data, opts, cb?) => this.rpcExec(topic, data, opts, cb),
-            topic,
-            data,
-            channel,
-            ack() {
-              debug('acknowledging message', topic, data);
-
-              if (acked) return;
-              acked = true;
-              clearTimeout(ackedTimer);
-
-              channel.ack(msg);
-            },
-            reject() {
-              debug('rejecting message', topic, data);
-
-              if (acked) return;
-              acked = true;
-              clearTimeout(ackedTimer);
-
-              channel.nack(msg);
-            }
-          };
-
-          const skipMiddleware = options && options.skipMiddleware || false;
-          if (skipMiddleware) {
-            return this.emit(topic, message);
-          }
-
-          this._runMiddleware(message, (middlewareErr: Error) => {
-            // TODO - how to handle common error function thing for middleware?
-            this.emit(topic, message);
+            return null;
           });
         };
 
-        channel.consume(this._formatName(topic), processMessage, {}, (err: Error/*, ok*/) => {
+        return Bluebird.fromCallback(callback =>
+          channel.consume(this._formatName(topic), processMessage, {}, callback)
+        ).catch(error => {
+          //
           // istanbul ignore next
-          if (err) {
-            this.emit('error', err);
-            if (cb) cb(err);
-            return;
-          }
-
-          if (cb) cb(null);
+          this.emit('error', error);
+          throw error;
         });
-      });
+      }).asCallback(cb);
     });
   }
 
@@ -601,9 +600,10 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
-      return this.whenReady(() => {
-        this.rpcListener(topic, opts, executor);
+      this.whenReady(() => {
+        return this.rpcListener(topic, opts, executor);
       });
+      return;
     }
 
     // istanbul ignore next
@@ -742,7 +742,7 @@ declare module Rabbitr {
 
   export interface IMessage<TData> {
     ack(): void;
-    reject(): void;
+    reject(error?: Error): void;
 
     topic: string;
     channel: amqplib.Channel;
