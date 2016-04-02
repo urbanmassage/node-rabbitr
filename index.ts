@@ -214,9 +214,9 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
-      return this.whenReady(() => {
-        return this.send(topic, data, cb, opts);
-      });
+      return this.whenReady(() =>
+        this.send(topic, data, cb, opts)
+      );
     }
 
     debug(chalk.yellow('send'), topic, data, opts);
@@ -251,9 +251,9 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
-      return this.whenReady(() => {
-        return this.subscribe(topic, opts, cb);
-      });
+      return this.whenReady(() =>
+        this.subscribe(topic, opts, cb)
+      );
     }
 
     const options: Rabbitr.ISubscribeOptions = opts;
@@ -363,9 +363,9 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
-      return this.whenReady(() => {
-        return this.bindExchangeToQueue(exchange, queue, cb);
-      });
+      return this.whenReady(() =>
+        this.bindExchangeToQueue(exchange, queue, cb)
+      );
     }
 
     debug(chalk.cyan('bindExchangeToQueue'), exchange, queue);
@@ -401,9 +401,9 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
-      return this.whenReady(() => {
-        return this.setTimer(topic, uniqueID, data, ttl, cb);
-      });
+      return this.whenReady(() =>
+        this.setTimer(topic, uniqueID, data, ttl, cb)
+      );
     }
 
     var timerQueue = this._timerQueueName(topic, uniqueID);
@@ -432,29 +432,22 @@ class Rabbitr extends EventEmitter {
     }).asCallback(cb);
   }
 
-  clearTimer(topic: string, uniqueID: string, cb?: Rabbitr.ErrorCallback) {
+  clearTimer(topic: string, uniqueID: string, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
-      return this.whenReady(() => {
-        this.clearTimer(topic, uniqueID, cb);
-      });
+      return this.whenReady(() =>
+        this.clearTimer(topic, uniqueID, cb)
+      );
     }
 
     var timerQueue = this._timerQueueName(topic, uniqueID);
 
     debug(chalk.yellow('clearTimer'), timerQueue);
 
-    try {
-      // For some reason we get an error thrown here.
-      // TODO - investigate
-      this._timerChannel.deleteQueue(timerQueue, {}, (err: Error) => {
-        if (cb) cb(err);
-      });
-    } // istanbul ignore next
-    catch (err) {
-      if (cb) cb(err);
-    }
+    return Bluebird.fromCallback(callback =>
+      this._timerChannel.deleteQueue(timerQueue, {}, callback)
+    ).asCallback(cb);
   }
 
   // rpc stuff
@@ -471,9 +464,9 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
-      return this.whenReady(() => {
-        this.rpcExec(topic, data, opts, cb);
-      });
+      return this.whenReady(() =>
+        this.rpcExec(topic, data, opts, cb)
+      );
     }
 
     // istanbul ignore next
