@@ -302,9 +302,7 @@ class Rabbitr extends EventEmitter {
               return null;
             }
 
-            Bluebird.fromCallback(callback =>
-              this._runMiddleware(message, callback)
-            ).then(() => {
+            this._runMiddleware(message).then(() => {
               // TODO - how to handle common error function thing for middleware?
               this.emit(topic, message);
               return null;
@@ -673,11 +671,10 @@ class Rabbitr extends EventEmitter {
   use(middlewareFunc: Rabbitr.Middleware) {
     this.middleware.push(middlewareFunc);
   }
-  private _runMiddleware(message: Rabbitr.IMessage<any>, next: Rabbitr.ErrorCallback) {
-    if (this.middleware.length === 0) return next(null);
-    async.eachSeries(this.middleware, (middlewareFunc, next) => {
-      middlewareFunc(message, next);
-    }, next);
+  private _runMiddleware(message: Rabbitr.IMessage<any>, next?: Rabbitr.ErrorCallback): Bluebird<void> {
+    return Bluebird.reduce(this.middleware, (memo: void, middlewareFunc) => {
+      return Bluebird.fromCallback<void>(callback => middlewareFunc(message, callback));
+    }, null).asCallback(next);
   }
 };
 
