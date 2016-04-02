@@ -175,37 +175,34 @@ class Rabbitr extends EventEmitter {
   }
 
   // method to destroy anything for this instance of rabbitr
-  destroy(cb?: Rabbitr.ErrorCallback): void {
+  destroy(cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     debug('destroying');
-    async.each(this._openChannels, (channel, next) => {
-      channel.close(err => {
+    return Bluebird.each(this._openChannels, channel => {
+      return Bluebird.fromCallback(callback => channel.close(callback))
+        .then(
+          () => debug('channel closed'),
+          err => {
+            // istanbul ignore next
+            debug('Error while closing connection', err);
+            throw err;
+          }
+        );
+    }).then(() => {
+      return Bluebird.fromCallback(callback =>
+        this.connection.close(callback)
+      ).then(
+        () => {
+          debug('connection closed');
+          this.removeAllListeners();
+          this.connectionPromise = null;
+        },
+        err => {
         // istanbul ignore next
-        if (err) {
           debug('Error while closing connection', err);
-        } else {
-          debug('channel closed');
+          throw err;
         }
-        next(err);
-      });
-    }, err => {
-      // istanbul ignore next
-      if (err) {
-        if (cb) cb(err);
-        return;
-      }
-
-      this.connection.close(err => {
-        // istanbul ignore next
-        if (err) {
-          debug('Error while closing connection', err);
-          if (cb) cb(err);
-          return;
-        }
-        debug('connection closed');
-        this.removeAllListeners();
-        if (cb) cb(null);
-      });
-    });
+      );
+    }).asCallback(cb);
   }
 
   // standard pub/sub stuff
