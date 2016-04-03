@@ -58,7 +58,8 @@ describe('rabbitr#rpc', function() {
 
     rabbit.rpcExec(queueName, {}, function(err, message) {
       expect(err).to.be.an.instanceOf(Error);
-      expect(err).to.deep.equal(error);
+      // bluebird injects some extra props (like __stackCleaned__) so this won't work.
+      // expect(err).to.deep.equal(error);
 
       ['name', 'message'].forEach(function(key) {
         // because these are not checked in deep-equal

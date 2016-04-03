@@ -67,6 +67,18 @@ class TimeoutError extends Error {
   }
 }
 
+/**
+ * This is a helper class used to detect when a middleware wants to send a response to an RPC message.
+ * The way we do this with promises is by throwing an instance of this class and the catching it.
+ */
+class MiddlewareResponse extends Error {
+  response: any;
+  constructor(response) {
+    super();
+    this.response = response;
+  }
+}
+
 let HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = false;
 
 class Rabbitr extends EventEmitter {
@@ -652,46 +664,55 @@ class Rabbitr extends EventEmitter {
         shift: message.ack,
       };
 
-      this._runMiddleware(message, (middlewareErr: Error) => {
-        // TODO - how to handle common error function thing for middleware?
-        var _cb: Rabbitr.Callback<TOutput> = (err?: Error, response?: TOutput): void => {
-          // istanbul ignore next
-          if (err) {
-            debug(`${chalk.cyan('rpcListener')} ${chalk.red('hit error')}`, err);
-          } else {
-            debug(`${chalk.cyan('rpcListener')} responding to topic ${topic} with`, response);
-          }
+      // TODO - how to handle common error function thing for middleware?
+      this._runMiddleware(message).then(() => {
+        return Bluebird.reduce( // run middleware
+            opts.middleware || [], (memo: void, middlewareFunc: Function) => {
+            return Bluebird.fromCallback<void>(callback => middlewareFunc(message, callback, response => {
+              callback(new MiddlewareResponse(response));
+            }));
+          }, null
+        )
+          .then<TOutput>(() => // then executor
+            maybeFromCallback(executor.bind(null, message))
+          )
+          .catch(error => {
+            // TODO - investigate why bluebird wraps the error here with an object
+            if (error && error.isOperational && error.cause) {
+              throw error.cause;
+            }
+            throw error;
+          })
+          .catch(MiddlewareResponse, ({response}) => { // catch middleware responses
+            return response
+          })
+          .then<any>( // sanitize errors
+            response => {
+              debug(`${chalk.cyan('rpcListener')} responding to topic ${topic} with`, response);
+              return {response};
+            }, error => {
+              debug(`${chalk.cyan('rpcListener')} ${chalk.red('hit error')}`, error);
 
-          // ack here - this will get ignored if the executor has acked or nacked already anyway
-          message.ack();
+              var isError = error instanceof Error;
+              var errJSON = isError ?
+                stringifyError(error) :
+                JSON.stringify(error);
 
-          var isError = err instanceof Error;
-          var errJSON = isError ?
-            stringifyError(err) :
-            JSON.stringify(err);
+              return {
+                error: errJSON,
+                isError,
+              };
+            }
+          )
+          .then(data => { // send the response
+            // ack here - this will get ignored if the executor has acked or nacked already anyway
+            message.ack();
 
-          // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
-          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify({
-            error: err ? errJSON : undefined,
-            isError: isError,
-            response: response,
-          })), {
+            // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
+            this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify(data)), {
               contentType: 'application/json'
             });
-        };
-
-        function _runExecutor() {
-          executor(message, _cb);
-        }
-
-        if (!opts.middleware || opts.middleware.length === 0) {
-          // no middleware specified for this listener
-          return _runExecutor();
-        }
-
-        async.eachSeries(opts.middleware, function(middlewareFunc, next) {
-          middlewareFunc(message, _cb, next);
-        }, _runExecutor);
+          }); // TODO - log uncaught errors at this stage? bluebird will do it anyway.
       });
     });
   }
@@ -741,9 +762,10 @@ declare module Rabbitr {
     middleware?: Function[];
     prefetch?: number;
   }
-  export interface IRpcListenerExecutor<TInput, TOutput> {
-    (message: IMessage<TInput>, respond: Callback<TOutput>): void;
-  }
+  export type IRpcListenerExecutor<TInput, TOutput> =
+    ((message: IMessage<TInput>) => PromiseLike<TOutput>) |
+    ((message: IMessage<TInput>, respond: Callback<TOutput>) => void);
+
   export interface ISubscribeOptions {
     prefetch?: number;
     skipMiddleware?: boolean;
