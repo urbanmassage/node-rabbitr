@@ -57,14 +57,15 @@ describe('rabbitr#rpc', function() {
     });
 
     rabbit.rpcExec(queueName, {}, function(err, message) {
+      expect(err).to.be.an.instanceOf(Error);
       expect(err).to.deep.equal(error);
 
-      expect(err).to.be.an.instanceOf(Error);
-
-      ['name', 'stack', 'message'].forEach(function(key) {
-      // because these are not checked in deep-equal
-      expect(err).to.have.property(key).that.is.deep.equal(error[key]);
+      ['name', 'message'].forEach(function(key) {
+        // because these are not checked in deep-equal
+        expect(err).to.have.property(key).that.is.deep.equal(error[key]);
       });
+
+      expect(err).to.have.property('stack').that.has.string(error.stack);
 
       done();
     });

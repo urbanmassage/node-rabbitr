@@ -458,12 +458,12 @@ class Rabbitr extends EventEmitter {
   rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): void;
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb: Rabbitr.Callback<TOutput>): void;
 
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>) {
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
       return this.whenReady(() =>
-        this.rpcExec(topic, data, opts, cb)
+        this.rpcExec<TInput, TOutput>(topic, data, opts, cb)
       );
     }
 
@@ -487,92 +487,110 @@ class Rabbitr extends EventEmitter {
 
     const channel = this._rpcReturnChannel;
 
-    channel.assertQueue(this._formatName(returnQueueName), {
-      exclusive: true,
-      expires: (this.opts.defaultRPCExpiry * 1 + 1000),
-      durable: false,
-    });
-
-    debug('using rpc return queue "%s"', chalk.cyan(returnQueueName));
-    const cleanup = () => {
-      // delete the return queue and close exc channel
-      try {
-        channel.deleteQueue(this._formatName(returnQueueName), noop);
-      }
-      // istanbul ignore next
-      catch (e) {
-        console.log('rabbitr cleanup exception', e);
-      }
-    };
-
-    // set a timeout
-    const timeoutMS = (opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
-    let timeout = setTimeout(function() {
-      debug('request timeout firing for', rpcQueue, 'to', returnQueueName);
-
-      cb(new TimeoutError({ topic: rpcQueue }), null);
-
-      cleanup();
-    }, timeoutMS);
-
-    const processMessage = (msg: any) => {
-      if (!msg) return;
-
-      let data = msg.content.toString();
-      if (msg.properties.contentType === 'application/json') {
-        data = parse(data);
-      }
-
-      if (processed) {
-        cleanup();
-        return;
-      }
-      processed = true;
-
-      clearTimeout(timeout);
-
-      let error = data.error;
-      const response: TOutput = data.response;
-
-      if (error) {
-        error = JSON.parse(error);
-        if (data.isError) {
-          var err: any = new Error(error.message);
-          Object.keys(error).forEach(function(key) {
-            if (err[key] !== error[key]) {
-              err[key] = error[key];
-            }
-          });
-          error = err;
-        }
-      }
-
-      if (cb) cb(error, response);
-
-      cleanup();
-    };
-
-    channel.consume(this._formatName(returnQueueName), processMessage, {
-      noAck: true
-    }, err => {
-      // istanbul ignore next
-      if (err) {
-        this.emit('error', err);
-        if (cb) cb(err, null);
-        return;
-      }
-
-      // send the request now
-      const obj = {
-        d: data,
-        returnQueue: this._formatName(returnQueueName),
-        expiration: now + timeoutMS
-      };
-      this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(obj)), {
-        contentType: 'application/json',
-        expiration: timeoutMS + ''
+    const queueDisposer = Bluebird.fromCallback<amqplib.Replies.AssertQueue>(callback =>
+      channel.assertQueue(this._formatName(returnQueueName), {
+        exclusive: true,
+        expires: (this.opts.defaultRPCExpiry * 1 + 1000),
+        durable: false,
+      }, callback)
+    ).disposer(() => {
+      debug('deleting temp queue');
+      return Bluebird.fromCallback<void>(callback =>
+        // delete the return queue and close exc channel
+        channel.deleteQueue(this._formatName(returnQueueName)) && 0 || callback(null)
+        // FIXME - callback isn't being called here.
+      ).catch(error => {
+        // istanbul ignore next
+        console.log('rabbitr cleanup exception', error && error.stack || error);
+        throw error;
+      }).then((ok) => {
+        debug('deleted temp queue', ok);
       });
     });
+
+    return Bluebird.using<any, any, any>(queueDisposer, (ok) => {
+      debug('using rpc return queue "%s"', chalk.cyan(returnQueueName));
+
+      const timeoutMS = (opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
+
+      const replyQueue = this._formatName(returnQueueName);
+
+      let replyCallback: Function;
+      const replyPromise = Bluebird
+        .fromCallback<amqplib.Message>(callback => { replyCallback = callback; });
+      let gotReply = function(msg) {
+        if (!msg) return;
+        debug(`got rpc reply on ${replyQueue}`);
+
+        replyCallback(null, msg);
+      }
+
+      return Bluebird.fromCallback(callback =>
+        channel.consume(replyQueue, gotReply, {noAck: true}, callback)
+      ).catch(error => {
+        // istanbul ignore next
+        this.emit('error', error);
+        throw error;
+      }).then<TOutput>(() => {
+        // send the request now
+        const request = {
+          d: data,
+          returnQueue: this._formatName(returnQueueName),
+          expiration: now + timeoutMS,
+        };
+
+        debug('sending rpc request');
+        this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(request)), {
+          contentType: 'application/json',
+          expiration: timeoutMS + '',
+        });
+
+        return Bluebird.race<amqplib.Message>([
+          // set a timeout
+          Bluebird.delay(timeoutMS).then<any>(() => {
+            throw new TimeoutError({ topic: rpcQueue });
+          }),
+          replyPromise,
+        ]).then<TOutput>(
+          msg => {
+            let data: any = msg.content.toString();
+            if (msg.properties.contentType === 'application/json') {
+              data = parse(data);
+            }
+
+            let error = data.error;
+            const response: TOutput = data.response;
+
+            if (error) {
+              error = JSON.parse(error);
+              if (data.isError) {
+                var err: any = new Error(error.message);
+                Object.keys(error).forEach(function(key) {
+                  if (err[key] !== error[key]) {
+                    err[key] = error[key];
+                  }
+                });
+                error = err;
+              }
+
+              throw error;
+            }
+
+            return response;
+          }, error => {
+            // TODO - investigate why bluebird wraps the error here with an object
+            if (error && error.isOperational && error.cause) {
+              throw error.cause;
+            }
+            throw error;
+          }
+        ).catch(TimeoutError, error => {
+          debug('request timeout firing for', rpcQueue, 'to', returnQueueName);
+          gotReply({}); // clean up so we don't have any unresolved promises left
+          throw error;
+        });
+      });
+    }).asCallback(cb);
   }
 
   rpcListener(topic: string, executor: Rabbitr.IRpcListenerExecutor<any, any>): void;
