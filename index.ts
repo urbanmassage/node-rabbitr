@@ -1,6 +1,6 @@
-import async = require('async');
-import chalk = require('chalk');
+import {cyan, red, yellow} from 'chalk';
 import {EventEmitter} from 'events';
+
 import amqplib = require('amqplib/callback_api');
 import objectAssign = require('object-assign');
 import shortId = require('shortid');
@@ -55,11 +55,13 @@ function parse(json: string): any {
 
 class TimeoutError extends Error {
   topic: string;
+  isRpc: boolean;
   name = 'TimeoutError';
-  constructor(details: { topic?: string } = {}) {
+  constructor(details: { isRpc: boolean, topic: string }) {
     super();
+    this.isRpc = details.isRpc;
     this.topic = details.topic;
-    this.message = `RPC request timed out on topic ${this.topic}`;
+    this.message = `${details.isRpc ? 'RPC request ' : ''}timed out on topic ${this.topic}`;
     (Error as any).captureStackTrace(this, this.constructor)
   }
 }
@@ -131,7 +133,7 @@ class Rabbitr extends EventEmitter {
   private _connect() {
     debug('#connect');
 
-    debug('using connection url', this.opts.url);
+    debug(`using connection url ${yellow(this.opts.url)}`);
 
     this.connectionPromise = Bluebird.fromCallback<amqplib.Connection>(callback =>
       amqplib.connect(this.opts.url, this.opts.connectionOpts, callback)
@@ -238,13 +240,13 @@ class Rabbitr extends EventEmitter {
       );
     }
 
-    debug(chalk.yellow('send'), topic, data, opts);
+    debug(yellow('send'), topic, data, opts);
 
     return Bluebird.fromCallback(callback =>
       this._publishChannel.assertExchange(this._formatName(topic), 'topic', {}, callback)
     ).then(() => {
       this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
-        contentType: 'application/json'
+        contentType: 'application/json',
       });
     }).asCallback(cb);
   }
@@ -277,7 +279,7 @@ class Rabbitr extends EventEmitter {
 
     const options: Rabbitr.ISubscribeOptions = opts;
 
-    debug(chalk.cyan('subscribe'), topic, options);
+    debug(cyan('subscribe'), topic, options);
 
     return Bluebird.fromCallback<amqplib.Channel>(callback =>
       this.connection.createChannel(callback)
@@ -303,7 +305,7 @@ class Rabbitr extends EventEmitter {
             data = parse(data);
           }
 
-          debug('got', topic, data);
+          debug(`got ${cyan(topic)}`, data);
 
           const messageAcknowledgement = new Bluebird((ack: () => void, reject) => {
             const message: Rabbitr.IMessage<TMessage> = {
@@ -329,12 +331,12 @@ class Rabbitr extends EventEmitter {
           }).then(
             // acknowledged
             () => {
-              debug('acknowledging message', topic, data);
+              debug(`acknowledging message ${cyan(topic)}`, data);
               channel.ack(msg);
             },
             // rejected
             error => {
-              debug('rejecting message', topic, data, error);
+              debug(`rejecting message ${cyan(topic)}`, data, error);
               console.error(error && error.stack || error);
               channel.nack(msg);
             }
@@ -346,7 +348,7 @@ class Rabbitr extends EventEmitter {
             Bluebird
               .delay(this.opts.ackWarningTimeout)
               .then(() => {
-                throw new TimeoutError();
+                throw new TimeoutError({isRpc: false, topic});
               }),
           ]).catch(TimeoutError, error => {
             this.emit('warning', {
@@ -385,7 +387,7 @@ class Rabbitr extends EventEmitter {
       );
     }
 
-    debug(chalk.cyan('bindExchangeToQueue'), exchange, queue);
+    debug(cyan('bindExchangeToQueue'), exchange, queue);
 
     return Bluebird.fromCallback<amqplib.Channel>(callback =>
       this.connection.createChannel(callback)
@@ -425,14 +427,14 @@ class Rabbitr extends EventEmitter {
 
     var timerQueue = this._timerQueueName(topic, uniqueID);
 
-    debug(chalk.yellow('setTimer'), topic, uniqueID, data);
+    debug(yellow('setTimer'), topic, uniqueID, data);
 
     return Bluebird.fromCallback(callback =>
       this._timerChannel.assertQueue(this._formatName(timerQueue), {
         durable: true,
         deadLetterExchange: this._formatName(topic),
         arguments: {
-          'x-dead-letter-routing-key': '*'
+          'x-dead-letter-routing-key': '*',
         },
         expires: (ttl + 1000)
       }, callback)
@@ -444,7 +446,7 @@ class Rabbitr extends EventEmitter {
       this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
         contentType: 'application/json',
         // TODO - should we do anything with this?
-        expiration: ttl + '',
+        expiration: `${ttl}`,
       });
     }).asCallback(cb);
   }
@@ -460,7 +462,7 @@ class Rabbitr extends EventEmitter {
 
     var timerQueue = this._timerQueueName(topic, uniqueID);
 
-    debug(chalk.yellow('clearTimer'), timerQueue);
+    debug(yellow('clearTimer'), timerQueue);
 
     return Bluebird.fromCallback(callback =>
       this._timerChannel.deleteQueue(timerQueue, {}, callback)
@@ -470,6 +472,30 @@ class Rabbitr extends EventEmitter {
   // rpc stuff
   private _rpcQueueName(topic: string): string {
     return `rpc.${topic}`;
+  }
+
+  private _getTempQueue(queueName: string, channel: amqplib.Channel) {
+    debug(`creating temp queue ${cyan(queueName)}`)
+    return Bluebird.fromCallback<amqplib.Replies.AssertQueue>(callback =>
+      channel.assertQueue(queueName, {
+        exclusive: true,
+        expires: (this.opts.defaultRPCExpiry * 1 + 1000),
+        durable: false,
+      }, callback)
+    ).disposer(() => {
+      debug(`deleting temp queue ${cyan(queueName)}`);
+      return Bluebird.fromCallback<void>(callback =>
+        // delete the return queue and close exc channel
+        channel.deleteQueue(queueName) && 0 || callback(null)
+        // FIXME - callback isn't being called here.
+      ).catch(error => {
+        // istanbul ignore next
+        console.log(`rabbitr temp queue '${cyan(queueName)}' cleanup exception`, error && error.stack || error);
+        throw error;
+      }).then(() => {
+        debug(`deleted temp queue ${cyan(queueName)}`);
+      });
+    });
   }
 
   rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Bluebird<any>;
@@ -497,7 +523,7 @@ class Rabbitr extends EventEmitter {
     const rpcQueue = this._rpcQueueName(topic);
 
     const unique = shortId.generate() + '_' + ((Math.round(new Date().getTime() / 1000) + '').substr(5));
-    const returnQueueName = rpcQueue + '.return.' + unique;
+    const returnQueueName = `${rpcQueue}.return.${unique}`;
 
     const now = new Date().getTime();
 
@@ -506,29 +532,10 @@ class Rabbitr extends EventEmitter {
 
     const channel = this._rpcReturnChannel;
 
-    const queueDisposer = Bluebird.fromCallback<amqplib.Replies.AssertQueue>(callback =>
-      channel.assertQueue(this._formatName(returnQueueName), {
-        exclusive: true,
-        expires: (this.opts.defaultRPCExpiry * 1 + 1000),
-        durable: false,
-      }, callback)
-    ).disposer(() => {
-      debug('deleting temp queue');
-      return Bluebird.fromCallback<void>(callback =>
-        // delete the return queue and close exc channel
-        channel.deleteQueue(this._formatName(returnQueueName)) && 0 || callback(null)
-        // FIXME - callback isn't being called here.
-      ).catch(error => {
-        // istanbul ignore next
-        console.log('rabbitr cleanup exception', error && error.stack || error);
-        throw error;
-      }).then((ok) => {
-        debug('deleted temp queue', ok);
-      });
-    });
+    const queueDisposer = this._getTempQueue(this._formatName(returnQueueName), channel);
 
-    return Bluebird.using<any, any, any>(queueDisposer, (ok) => {
-      debug('using rpc return queue "%s"', chalk.cyan(returnQueueName));
+    return Bluebird.using(queueDisposer, () => {
+      debug(`using rpc return queue ${cyan(returnQueueName)}`);
 
       const timeoutMS = (opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
 
@@ -539,7 +546,7 @@ class Rabbitr extends EventEmitter {
         .fromCallback<amqplib.Message>(callback => { replyCallback = callback; });
       let gotReply = function(msg) {
         if (!msg) return;
-        debug(`got rpc reply on ${replyQueue}`);
+        debug(`got rpc reply on ${cyan(replyQueue)}`);
 
         replyCallback(null, msg);
       }
@@ -561,13 +568,13 @@ class Rabbitr extends EventEmitter {
         debug('sending rpc request');
         this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(request)), {
           contentType: 'application/json',
-          expiration: timeoutMS + '',
+          expiration: `${timeoutMS}`,
         });
 
         return Bluebird.race<amqplib.Message>([
           // set a timeout
           Bluebird.delay(timeoutMS).then<any>(() => {
-            throw new TimeoutError({ topic: rpcQueue });
+            throw new TimeoutError({isRpc: true, topic});
           }),
           replyPromise,
         ]).then<TOutput>(
@@ -604,7 +611,7 @@ class Rabbitr extends EventEmitter {
             throw error;
           }
         ).catch(TimeoutError, error => {
-          debug('request timeout firing for', rpcQueue, 'to', returnQueueName);
+          debug(`request timeout firing for ${rpcQueue} to ${returnQueueName}`);
           gotReply({}); // clean up so we don't have any unresolved promises left
           throw error;
         });
@@ -640,7 +647,7 @@ class Rabbitr extends EventEmitter {
     (<any>opts).durable = false;
     this.subscribe(rpcQueue, opts, function() {});
 
-    debug('has rpcListener for', topic);
+    debug(`has rpcListener for ${topic}`);
 
     this.on(rpcQueue, (envelope: Rabbitr.IEnvelopedMessage<TInput>) => {
       const dataEnvelope = envelope.data;
@@ -684,10 +691,10 @@ class Rabbitr extends EventEmitter {
           })
           .then<any>( // sanitize errors
             response => {
-              debug(`${chalk.cyan('rpcListener')} responding to topic ${topic} with`, response);
+              debug(`${yellow('rpcListener')} responding to topic ${cyan(topic)} with`, response);
               return {response};
             }, error => {
-              debug(`${chalk.cyan('rpcListener')} ${chalk.red('hit error')}`, error);
+              debug(`${yellow('rpcListener')} on topic ${cyan(topic)} ${red('hit error')}`, error);
 
               var isError = error instanceof Error;
               var errJSON = isError ?
@@ -706,7 +713,7 @@ class Rabbitr extends EventEmitter {
 
             // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
             this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify(data)), {
-              contentType: 'application/json'
+              contentType: 'application/json',
             });
           }); // TODO - log uncaught errors at this stage? bluebird will do it anyway.
       });

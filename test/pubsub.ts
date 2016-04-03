@@ -1,6 +1,6 @@
 import Rabbitr = require('../');
 import {expect} from 'chai';
-const uuid = require('uuid');
+import shortId = require('shortid');
 
 describe('rabbitr#pubsub', function() {
   const rabbit = new Rabbitr({
@@ -9,8 +9,8 @@ describe('rabbitr#pubsub', function() {
   before((done) => rabbit.whenReady(done));
 
   it('should receive messages on the specified queue', function(done) {
-    const exchangeName = uuid.v4() + '.pubsub_test';
-    const queueName = uuid.v4() + '.pubsub_test';
+    const exchangeName = shortId.generate() + '.pubsub_test';
+    const queueName = shortId.generate() + '.pubsub_test';
 
     after(function(done) {
       // cleanup
@@ -41,8 +41,8 @@ describe('rabbitr#pubsub', function() {
   });
 
   it('passes Buffers', function(done) {
-    const exchangeName = uuid.v4() + '.pubsub_buf_test';
-    const queueName = uuid.v4() + '.pubsub_buf_test';
+    const exchangeName = shortId.generate() + '.pubsub_buf_test';
+    const queueName = shortId.generate() + '.pubsub_buf_test';
 
     after(function(done) {
       // cleanup

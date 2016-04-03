@@ -1,12 +1,21 @@
-import Rabbitr = require('../');
-import async = require('async');
 import {expect} from 'chai';
-const uuid = require('uuid');
+import Rabbitr = require('../');
+import Bluebird = require('bluebird');
+import shortId = require('shortid');
+
+const timesAsync = (times: number, fn: (step: number) => PromiseLike<any>) => {
+  let step = (n: number) => {
+    if (n === times) return;
+    return Bluebird.resolve(n).then(fn).then(() => step(n + 1));
+  };
+
+  return step(0);
+}
 
 describe('rabbitr#destroy', function() {
   it('should be able to destroy an instance with pubsub listeners', function(done) {
-    const exchangeName = uuid.v4() + '.test';
-    const queueName = uuid.v4() + '.test';
+    const exchangeName = shortId.generate() + '.test';
+    const queueName = shortId.generate() + '.test';
 
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
@@ -25,7 +34,7 @@ describe('rabbitr#destroy', function() {
   });
 
   it('should be able to destroy an instance with rpc listeners', function(done) {
-    const channelName = uuid.v4() + '.rpc_test';
+    const channelName = shortId.generate() + '.rpc_test';
 
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
@@ -44,34 +53,32 @@ describe('rabbitr#destroy', function() {
 
   let ifGcIt = global.gc ? it : it.skip;
 
-  ifGcIt('doesn\'t leak', function(done) {
-    function runCycle(done: (err: Error) => void) {
+  ifGcIt('doesn\'t leak', function() {
+    function runCycle() {
       const rabbit = new Rabbitr({
         url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
       });
-      rabbit.whenReady(() => {
-        setTimeout(function() {
-          rabbit.destroy(err => {
-            global.gc();
-            done(err);
-          });
-        }, 100);
-      });
+      return rabbit.whenReady(() =>
+        Bluebird
+          .delay(100)
+          .then(() =>
+            rabbit.destroy()
+          )
+          .then(() =>
+            global.gc()
+          )
+      );
     }
 
     /** number of times to run a connection cycle */
     let times = 5;
 
     // run a cycle before so we get accurate measures.
-    async.timesSeries<void>(2, (n, done) => runCycle(<any>done), function(err) {
-      if (err) return done(err);
+    return timesAsync(times, runCycle).then(() => {
       const {heapUsed} = process.memoryUsage();
 
-      async.timesSeries<void>(times, (n, done) => runCycle(<any>done), function(err) {
-        if (err) return done(err);
-
+      return timesAsync(times, runCycle).then(() => {
         expect(process.memoryUsage().heapUsed).to.be.lessThan(heapUsed * 1.01);
-        done();
       });
     });
   });

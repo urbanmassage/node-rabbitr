@@ -1,6 +1,6 @@
 import {expect} from 'chai';
 import Rabbitr = require('../');
-const uuid = require('uuid');
+import shortId = require('shortid');
 
 const ACCEPTABLE_TIMER_THRESHOLD = 10;
 
@@ -13,7 +13,7 @@ describe('rabbitr#setTimer', function() {
   it('should receive a message after a set number of milliseconds', function(done) {
     const DELAY = 50;
 
-    const queueName = uuid.v4() + '.timer_test';
+    const queueName = shortId.generate() + '.timer_test';
 
     after(function(done) {
       // cleanup
@@ -50,7 +50,7 @@ describe('rabbitr#setTimer', function() {
   it('should not receive a message if #clearTimer is called', function(done) {
     const DELAY = 50;
 
-    const queueName = uuid.v4() + '.clear_timer_test';
+    const queueName = shortId.generate() + '.clear_timer_test';
 
     after(function(done) {
       // cleanup
