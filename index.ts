@@ -53,9 +53,6 @@ function parse(json: string): any {
   });
 }
 
-const noop = (): void => void 0;
-const call = (cb: Function) => cb();
-
 class TimeoutError extends Error {
   topic: string;
   name = 'TimeoutError';
@@ -104,7 +101,6 @@ class Rabbitr extends EventEmitter {
     this.opts = objectAssign(<Rabbitr.IOptions>{
       url: '',
       queuePrefix: '',
-      setup: call,
       ackWarningTimeout: 5000,
       autoAckOnTimeout: null,
       defaultRPCExpiry: DEFAULT_RPC_EXPIRY,
@@ -170,7 +166,7 @@ class Rabbitr extends EventEmitter {
           this.connected = true;
 
           debug('ready');
-          return maybeFromCallback<void>(this.opts.setup)
+          return maybeFromCallback<void>(this.opts.setup || (() => Bluebird.resolve()))
             .then(() => {
               this.ready = true;
               return conn;
@@ -230,10 +226,10 @@ class Rabbitr extends EventEmitter {
 
   // standard pub/sub stuff
 
-  send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): Bluebird<void>;
-  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+  send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+  send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
 
-  send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): Bluebird<void> {
+  send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
@@ -262,7 +258,7 @@ class Rabbitr extends EventEmitter {
   subscribe(topic: string, cb?: Rabbitr.Callback<any>): Bluebird<void>;
   subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): Bluebird<void>;
   subscribe<TMessage>(topic: string, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
-  subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb: Rabbitr.Callback<TMessage>): Bluebird<void>;
+  subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
 
   subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     // istanbul ignore next
@@ -311,8 +307,8 @@ class Rabbitr extends EventEmitter {
 
           const messageAcknowledgement = new Bluebird((ack: () => void, reject) => {
             const message: Rabbitr.IMessage<TMessage> = {
-              send: (topic, data, cb?, opts?) => this.send(topic, data, cb, opts),
-              rpcExec: (topic, data, opts, cb?) => this.rpcExec(topic, data, opts, cb),
+              send: this.send.bind(this),
+              rpcExec: this.rpcExec.bind(this),
               topic,
               data,
               channel,
@@ -476,10 +472,10 @@ class Rabbitr extends EventEmitter {
     return `rpc.${topic}`;
   }
 
-  rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): void;
-  rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): void;
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): void;
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb: Rabbitr.Callback<TOutput>): void;
+  rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Bluebird<any>;
+  rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): Bluebird<any>;
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
 
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
     // istanbul ignore next
@@ -728,6 +724,8 @@ class Rabbitr extends EventEmitter {
   }
 };
 
+var rabbitr: Rabbitr;
+
 declare module Rabbitr {
   /** you MUST provide a 'url' rather than separate 'host', 'password', 'vhost' now */
   export interface IOptions {
@@ -782,12 +780,8 @@ declare module Rabbitr {
     channel: amqplib.Channel;
     data: TData;
 
-    send(topic: string, data: any, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
-    send<TInput>(topic: string, data: TInput, cb?: (err?: Error | any) => void, opts?: Rabbitr.ISendOptions): void;
-    rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): void;
-    rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): void;
-    rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): void;
-    rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb: Rabbitr.Callback<TOutput>): void;
+    send: typeof rabbitr.send;
+    rpcExec: typeof rabbitr.rpcExec;
 
     queue?: {
       shift: () => void;
