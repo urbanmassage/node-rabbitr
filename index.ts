@@ -731,8 +731,6 @@ class Rabbitr extends EventEmitter {
   }
 };
 
-var rabbitr: Rabbitr;
-
 declare module Rabbitr {
   /** you MUST provide a 'url' rather than separate 'host', 'password', 'vhost' now */
   export interface IOptions {
@@ -787,8 +785,13 @@ declare module Rabbitr {
     channel: amqplib.Channel;
     data: TData;
 
-    send: typeof rabbitr.send;
-    rpcExec: typeof rabbitr.rpcExec;
+    send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+    send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+
+    rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Bluebird<any>;
+    rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): Bluebird<any>;
+    rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
+    rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
 
     queue?: {
       shift: () => void;
