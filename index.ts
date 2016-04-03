@@ -721,10 +721,10 @@ class Rabbitr extends EventEmitter {
   use(middlewareFunc: Rabbitr.Middleware) {
     this.middleware.push(middlewareFunc);
   }
-  private _runMiddleware(message: Rabbitr.IMessage<any>, next?: Rabbitr.ErrorCallback): Bluebird<void> {
+  private _runMiddleware(message: Rabbitr.IMessage<any>): Bluebird<void> {
     return Bluebird.reduce(this.middleware, (memo: void, middlewareFunc) => {
       return Bluebird.fromCallback<void>(callback => middlewareFunc(message, callback));
-    }, null).asCallback(next);
+    }, null);
   }
 };
 
