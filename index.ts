@@ -23,6 +23,17 @@ function stringify(obj: any): string {
   return JSON.stringify(obj);
 }
 
+function maybeFromCallback<T>(fn: ((done: Rabbitr.Callback<T>) => void) | (() => PromiseLike<T>)): Bluebird<T> {
+  let callback: Rabbitr.Callback<T>;
+  let promise = Bluebird.fromCallback<T>(_callback => (callback = _callback) && void 0);
+
+  let val = (fn as Function)(callback);
+  if (val && val.then) {
+    return Bluebird.resolve(val);
+  }
+  return promise;
+}
+
 // helper function to properly stringify an error object
 function stringifyError(err, filter?, space?) {
   var plainObject = {
@@ -147,7 +158,7 @@ class Rabbitr extends EventEmitter {
           this.connected = true;
 
           debug('ready');
-          return Bluebird.fromCallback(this.opts.setup)
+          return maybeFromCallback<void>(this.opts.setup)
             .then(() => {
               this.ready = true;
               return conn;
@@ -705,7 +716,7 @@ declare module Rabbitr {
     queuePrefix?: string;
 
     /** called once the connection is ready but before anything is bound (allows for ORM setup etc) */
-    setup?: (done: Rabbitr.ErrorCallback) => void;
+    setup?: ((done: Rabbitr.ErrorCallback) => void) | (() => PromiseLike<void>);
     connectionOpts?: {
       heartbeat?: boolean;
     };
