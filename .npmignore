@@ -6,3 +6,6 @@ typings/
 examples/
 test/
 .vscode/
+
+*.ts
+!*.d.ts

@@ -10,7 +10,6 @@ services:
 script:
 - npm run typings
 - npm run build
-- npm run declaration
 - npm test
 after_success:
 - test $TRAVIS_NODE_VERSION = "4.1" && npm run coverage && npm run sendcoverage
