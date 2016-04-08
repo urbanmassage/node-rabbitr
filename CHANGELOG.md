@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 8.1.0
+- not publishing source `.ts` files to npm anymore
+- using separate source maps instead of inline ones
+
 ## 8.0.8
 - made `TimeoutError` more useful by adding the topic to the error message and fixing an issue with stack being missing.
 
