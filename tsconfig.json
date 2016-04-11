@@ -2,8 +2,9 @@
   "compilerOptions": {
     "target": "es5",
     "module": "commonjs",
-    "inlineSourceMap": true,
-    "moduleResolution": "node"
+    "sourceMap": true,
+    "moduleResolution": "node",
+    "declaration": true
   },
   "exclude": [
     "node_modules",

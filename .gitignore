@@ -4,6 +4,7 @@ coverage/
 
 *.js
 *.log
-index.d.ts
+*.d.ts
+*.map
 
 typings/

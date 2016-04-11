@@ -8,8 +8,8 @@
     "when": "github:DefinitelyTyped/DefinitelyTyped/when/when.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94"
   },
   "dependencies": {
-    "amqplib": "github:louy/typed-amqplib#9c1cccc22621c4dcba6f551023928a14be5b5496",
-    "bluebird": "github:louy/typed-bluebird"
+    "amqplib": "registry:npm/amqplib#0.4.1+20160401203933",
+    "bluebird": "registry:npm/bluebird#3.3.4+20160406213700"
   },
   "devDependencies": {
     "chai": "registry:npm/chai#3.5.0+20160402210230",
