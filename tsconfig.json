@@ -3,10 +3,10 @@
     "target": "es5",
     "module": "commonjs",
     "sourceMap": true,
-    "moduleResolution": "node",
-    "declaration": true
+    "moduleResolution": "node"
   },
   "exclude": [
+    "*.d.ts",
     "node_modules",
     "typings/browser.d.ts",
     "typings/browser"

@@ -1,6 +1,6 @@
 {
   "ambientDependencies": {
-    "node": "github:DefinitelyTyped/DefinitelyTyped/node/node.d.ts#48c1e3c1d6baefa4f1a126f188c27c4fefd36bff"
+    "node": "registry:dt/node#4.0.0+20160412142033"
   },
   "ambientDevDependencies": {
     "mocha": "github:DefinitelyTyped/DefinitelyTyped/mocha/mocha.d.ts#d6dd320291705694ba8e1a79497a908e9f5e6617",
@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "amqplib": "registry:npm/amqplib#0.4.1+20160401203933",
-    "bluebird": "registry:npm/bluebird#3.3.4+20160406213700"
+    "bluebird": "registry:npm/bluebird#3.3.4+20160411163813"
   },
   "devDependencies": {
     "chai": "registry:npm/chai#3.5.0+20160402210230",

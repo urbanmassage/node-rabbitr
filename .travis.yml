@@ -12,7 +12,7 @@ script:
 - npm run build
 - npm test
 after_success:
-- test $TRAVIS_NODE_VERSION = "5.10" && npm run coverage && npm run sendcoverage
+- test $TRAVIS_NODE_VERSION = "5.10" && npm run coverage && npm run sendcoverage && npm run build-deploy
 notifications:
   hipchat:
     rooms:
