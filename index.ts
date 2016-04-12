@@ -619,12 +619,12 @@ class Rabbitr extends EventEmitter {
     }).asCallback(cb);
   }
 
-  rpcListener(topic: string, executor: Rabbitr.IRpcListenerExecutor<any, any>): Bluebird<void>;
-  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>): Bluebird<void>;
-  rpcListener<TInput, TOutput>(topic: string, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): Bluebird<void>;
-  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): Bluebird<void>;
+  rpcListener(topic: string, executor: Rabbitr.IRpcListenerExecutor<any, any>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
+  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
+  rpcListener<TInput, TOutput>(topic: string, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
+  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
 
-  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): Bluebird<void> {
+  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.ErrorCallback): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
@@ -637,8 +637,9 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if ('function' === typeof opts) {
       // shift arguments
-      executor = <Rabbitr.IRpcListenerExecutor<TInput, TOutput>>opts;
-      opts = <Rabbitr.IRpcListenerOptions<TInput, TOutput>>{};
+      callback = executor as any;
+      executor = opts as any;
+      opts = {};
     }
 
     var rpcQueue = this._rpcQueueName(topic);
@@ -718,7 +719,7 @@ class Rabbitr extends EventEmitter {
       });
     });
 
-    return this.subscribe(rpcQueue, opts);
+    return this.subscribe(rpcQueue, opts).asCallback(callback);
   }
 
   // message middleware support
