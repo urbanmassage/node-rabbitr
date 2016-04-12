@@ -6,7 +6,6 @@ describe('rabbitr#rpc', function() {
   const rabbit = new Rabbitr({
     url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
   });
-  before((done) => rabbit.whenReady(done));
 
   it('should receive messages on rpcListener', function(done) {
     const queueName = shortId.generate() + '.rpc_test';
