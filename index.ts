@@ -619,12 +619,12 @@ class Rabbitr extends EventEmitter {
     }).asCallback(cb);
   }
 
-  rpcListener(topic: string, executor: Rabbitr.IRpcListenerExecutor<any, any>): void;
-  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>): void;
-  rpcListener<TInput, TOutput>(topic: string, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void;
-  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void;
+  rpcListener(topic: string, executor: Rabbitr.IRpcListenerExecutor<any, any>): Bluebird<void>;
+  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>): Bluebird<void>;
+  rpcListener<TInput, TOutput>(topic: string, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): Bluebird<void>;
+  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): Bluebird<void>;
 
-  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): void {
+  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled) {
       // delay until ready
@@ -645,7 +645,6 @@ class Rabbitr extends EventEmitter {
 
     (<any>opts).skipMiddleware = true;
     (<any>opts).durable = false;
-    this.subscribe(rpcQueue, opts, function() {});
 
     debug(`has rpcListener for ${topic}`);
 
@@ -718,6 +717,8 @@ class Rabbitr extends EventEmitter {
           }); // TODO - log uncaught errors at this stage? bluebird will do it anyway.
       });
     });
+
+    return this.subscribe(rpcQueue, opts);
   }
 
   // message middleware support
