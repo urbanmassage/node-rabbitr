@@ -233,7 +233,7 @@ class Rabbitr extends EventEmitter {
 
   send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void> {
     // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled) {
+    if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady(() =>
         this.send(topic, data, cb, opts)
@@ -270,7 +270,7 @@ class Rabbitr extends EventEmitter {
     }
 
     // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled) {
+    if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady(() =>
         this.subscribe(topic, opts, cb)
@@ -380,7 +380,7 @@ class Rabbitr extends EventEmitter {
 
   bindExchangeToQueue(exchange: string, queue: string, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled) {
+    if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady(() =>
         this.bindExchangeToQueue(exchange, queue, cb)
@@ -418,7 +418,7 @@ class Rabbitr extends EventEmitter {
 
   setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled) {
+    if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady(() =>
         this.setTimer(topic, uniqueID, data, ttl, cb)
@@ -453,7 +453,7 @@ class Rabbitr extends EventEmitter {
 
   clearTimer(topic: string, uniqueID: string, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled) {
+    if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady(() =>
         this.clearTimer(topic, uniqueID, cb)
@@ -505,7 +505,7 @@ class Rabbitr extends EventEmitter {
 
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
     // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled) {
+    if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady(() =>
         this.rpcExec<TInput, TOutput>(topic, data, opts, cb)
@@ -626,7 +626,7 @@ class Rabbitr extends EventEmitter {
 
   rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): Bluebird<void> {
     // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled) {
+    if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       this.whenReady(() => {
         return this.rpcListener(topic, opts, executor);
