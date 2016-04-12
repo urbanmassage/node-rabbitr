@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 8.2.1
+- bugfix when calling any method before connection is established
+- callback/promise in `rpcListener`
+
+## 8.2.0
+- promises support
+
 ## 8.1.0
 - not publishing source `.ts` files to npm anymore
 - using separate source maps instead of inline ones
