@@ -671,8 +671,8 @@ class Rabbitr extends EventEmitter {
       this._runMiddleware(message).then(() => {
         return Bluebird.reduce( // run middleware
             opts.middleware || [], (memo: void, middlewareFunc: Function) => {
-            return Bluebird.fromCallback<void>(callback => middlewareFunc(message, callback, response => {
-              callback(new MiddlewareResponse(response));
+            return Bluebird.fromCallback<void>(callback => middlewareFunc(message, callback, (err, response) => {
+              callback(err || new MiddlewareResponse(response));
             }));
           }, null
         )
