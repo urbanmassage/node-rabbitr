@@ -264,7 +264,7 @@ class Rabbitr extends EventEmitter {
 
   subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     // istanbul ignore next
-    if (!cb) {
+    if (typeof opts === 'function') {
       cb = <any>opts;
       opts = null;
     }
