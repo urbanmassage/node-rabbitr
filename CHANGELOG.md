@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 8.2.3
+- critical bugfix in `subscribe`/`rpcListener` and durable queues
+
 ## 8.2.1
 - bugfix when calling any method before connection is established
 - callback/promise in `rpcListener`
