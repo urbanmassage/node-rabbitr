@@ -29,7 +29,7 @@
     "codecov.io": "^0.1.6",
     "istanbul": "^0.4.3",
     "map-coverage": "0.0.3",
-    "mocha": "^2.3.4",
+    "mocha": "^2.5.0",
     "source-map-support": "^0.4.0",
     "typescript": "^1.8.9",
     "typings": "^0.8.1"
