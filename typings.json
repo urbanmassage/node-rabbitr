@@ -1,12 +1,4 @@
 {
-  "ambientDependencies": {
-    "node": "registry:dt/node#4.0.0+20160412142033"
-  },
-  "ambientDevDependencies": {
-    "mocha": "github:DefinitelyTyped/DefinitelyTyped/mocha/mocha.d.ts#d6dd320291705694ba8e1a79497a908e9f5e6617",
-    "shortid": "github:DefinitelyTyped/DefinitelyTyped/shortid/shortid.d.ts#c560ba6f0f55ce6f50e9d06e37b5bc0e2b9117b0",
-    "when": "github:DefinitelyTyped/DefinitelyTyped/when/when.d.ts#fc341765ebbb04b7109981a25dced01f488f4d94"
-  },
   "dependencies": {
     "amqplib": "registry:npm/amqplib#0.4.1+20160401203933",
     "bluebird": "registry:npm/bluebird#3.3.4+20160411163813"
@@ -15,5 +7,13 @@
     "chai": "registry:npm/chai#3.5.0+20160402210230",
     "chalk": "registry:npm/chalk#1.0.0+20160211003958",
     "object-assign": "registry:npm/object-assign#4.0.1+20160301180549"
+  },
+  "globalDependencies": {
+    "node": "registry:env/node#4.0.0+20160507210304"
+  },
+  "globalDevDependencies": {
+    "mocha": "registry:dt/mocha#2.2.5+20160317120654",
+    "shortid": "registry:dt/shortid#0.0.0+20160316155526",
+    "when": "registry:dt/when#2.4.0+20160317120654"
   }
 }

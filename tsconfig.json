@@ -7,8 +7,6 @@
   },
   "exclude": [
     "*.d.ts",
-    "node_modules",
-    "typings/browser.d.ts",
-    "typings/browser"
+    "node_modules"
   ]
 }

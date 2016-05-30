@@ -4,7 +4,7 @@
   "description": "RabbitMQ made easy for nodejs",
   "main": "index",
   "scripts": {
-    "typings": "typings install",
+    "typings": "typings install && typings prune",
     "build": "tsc -p .",
     "build-deploy": "tsc typings/main.d.ts index.ts --target es5 --module commonjs --declaration --sourceMap",
     "test": "mocha -gc",
@@ -31,8 +31,8 @@
     "map-coverage": "0.0.3",
     "mocha": "^2.3.4",
     "source-map-support": "^0.4.0",
-    "typescript": "^1.8.9",
-    "typings": "^0.8.1"
+    "typescript": "^1.8.10",
+    "typings": "^1.0.4"
   },
   "typings": "index.d.ts",
   "directories": {
