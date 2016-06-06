@@ -14,8 +14,8 @@ const timesAsync = (times: number, fn: (step: number) => PromiseLike<any>) => {
 
 describe('rabbitr#destroy', function() {
   it('should be able to destroy an instance with pubsub listeners', function(done) {
-    const exchangeName = shortId.generate() + '.test';
-    const queueName = shortId.generate() + '.test';
+    const exchangeName = `${shortId.generate()}.test`;
+    const queueName = `${shortId.generate()}.test`;
 
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
@@ -34,7 +34,7 @@ describe('rabbitr#destroy', function() {
   });
 
   it('should be able to destroy an instance with rpc listeners', function(done) {
-    const channelName = shortId.generate() + '.rpc_test';
+    const channelName = `${shortId.generate()}.rpc_test`;
 
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
@@ -51,9 +51,62 @@ describe('rabbitr#destroy', function() {
     });
   });
 
+  it('should be able to destroy a subscription', function() {
+    const exchangeName = `${shortId.generate()}.test`;
+    const queueName = `${shortId.generate()}.test`;
+
+    const rabbit = new Rabbitr({
+      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+    });
+
+    return rabbit.whenReady(() => {
+      return rabbit.bindExchangeToQueue(exchangeName, queueName)
+        .then(() =>
+          rabbit.on(exchangeName, ({ack}) => ack())
+        ).then(() =>
+          rabbit.subscribe(queueName)
+        ).then(subscription => {
+          expect(Object.keys((rabbit as any).eventListeners)).to.deep.equal([queueName]);
+          rabbit.off(exchangeName);
+          return subscription.destroy();
+        })
+        .then(() => {
+          expect(Object.keys((rabbit as any).eventListeners)).to.deep.equal([]);
+        });
+      })
+      .finally(() => {
+        return rabbit.destroy();
+      });
+  });
+
+  it('should be able to destroy an rpc subscription', function() {
+    const channelName = `${shortId.generate()}.rpc_test`;
+
+    const rabbit = new Rabbitr({
+      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+    });
+
+    return rabbit.whenReady(() => {
+      return rabbit.rpcListener(channelName, ({ack}) => ack({}))
+        .then(subscription => {
+          return rabbit.rpcExec(channelName, {})
+            .then((response) => {
+              expect(Object.keys((rabbit as any).eventListeners)).to.deep.equal([channelName]);
+              return subscription.destroy();
+            })
+            .then(() => {
+              expect(Object.keys((rabbit as any).eventListeners)).to.deep.equal([]);
+            });
+        })
+        .finally(() => {
+          return rabbit.destroy();
+        });
+    });
+  });
+
   let ifGcIt = global.gc ? it : it.skip;
 
-  ifGcIt('doesn\'t leak', function() {
+  ifGcIt(`doesn't leak`, function() {
     function runCycle() {
       const rabbit = new Rabbitr({
         url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',

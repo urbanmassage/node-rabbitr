@@ -99,7 +99,7 @@ class Rabbitr {
     this.eventListeners[eventName] = listener;
   }
 
-  private off(eventName: string) {
+  off(eventName: string) {
     if (!this.eventListeners[eventName]) {
       throw new Error(`Attempted to remove a non-existent event listener: ${eventName}`);
     }
@@ -309,6 +309,8 @@ class Rabbitr {
 
     debug(cyan('subscribe'), topic, options);
 
+    const queue = this._formatName(topic);
+
     return Bluebird.fromCallback<amqplib.Channel>(callback =>
       this.connection.createChannel(callback)
     ).catch(error => {
@@ -318,7 +320,7 @@ class Rabbitr {
       this._openChannels.push(channel);
 
       return Bluebird.fromCallback(callback =>
-        channel.assertQueue(this._formatName(topic), objectAssign({
+        channel.assertQueue(queue, objectAssign({
           durable: true,
         }, options), callback)
       ).then(ok => {
@@ -388,7 +390,7 @@ class Rabbitr {
         };
 
         return Bluebird.fromCallback(callback =>
-          channel.consume(this._formatName(topic), processMessage, {}, callback)
+          channel.consume(queue, processMessage, {}, callback)
         ).catch(error => {
           // istanbul ignore next
           throw error;
@@ -396,6 +398,7 @@ class Rabbitr {
         .then<Rabbitr.EventSubscription>(() => {
           return {
             destroy: () => {
+              debug(`destroy ${queue}`);
               return Bluebird.fromCallback(callback =>
                 channel.close(callback)
               );
@@ -744,8 +747,11 @@ class Rabbitr {
     return this.subscribe(rpcQueue, opts).then<Rabbitr.RpcSubscription>(subscription => {
       return {
         destroy: () => {
-          this.off(rpcQueue);
-          return subscription.destroy();
+          debug(`rpc destroy ${rpcQueue}`);
+          return subscription.destroy()
+            .then(() => {
+              this.off(rpcQueue);
+            });
         },
       };
     }).asCallback(callback);
