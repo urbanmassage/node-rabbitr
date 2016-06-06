@@ -285,13 +285,12 @@ class Rabbitr {
     }).asCallback(cb);
   }
 
+  subscribe(topic: string, cb?: Rabbitr.Callback<Rabbitr.EventSubscription>): Bluebird<Rabbitr.EventSubscription>;
+  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<Rabbitr.EventSubscription>): Bluebird<Rabbitr.EventSubscription>;
+  subscribe<TMessage>(topic: string, cb?: Rabbitr.Callback<TMessage>): Bluebird<Rabbitr.EventSubscription>;
+  subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<TMessage>): Bluebird<Rabbitr.EventSubscription>;
 
-  subscribe(topic: string, cb?: Rabbitr.Callback<any>): Bluebird<void>;
-  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): Bluebird<void>;
-  subscribe<TMessage>(topic: string, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
-  subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
-
-  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
+  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): Bluebird<Rabbitr.EventSubscription> {
     // istanbul ignore next
     if (typeof opts === 'function') {
       cb = <any>opts;
@@ -393,6 +392,15 @@ class Rabbitr {
         ).catch(error => {
           // istanbul ignore next
           throw error;
+        })
+        .then<Rabbitr.EventSubscription>(() => {
+          return {
+            destroy: () => {
+              return Bluebird.fromCallback(callback =>
+                channel.close(callback)
+              );
+            },
+          };
         });
       }).asCallback(cb);
     });
@@ -633,12 +641,12 @@ class Rabbitr {
     }).asCallback(cb);
   }
 
-  rpcListener(topic: string, executor: Rabbitr.IRpcListenerExecutor<any, any>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
-  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
-  rpcListener<TInput, TOutput>(topic: string, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
-  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
+  rpcListener(topic: string, executor: Rabbitr.IRpcListenerExecutor<any, any>, callback?: Rabbitr.Callback<Rabbitr.RpcSubscription>): Bluebird<Rabbitr.RpcSubscription>;
+  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>, callback?: Rabbitr.Callback<Rabbitr.RpcSubscription>): Bluebird<Rabbitr.RpcSubscription>;
+  rpcListener<TInput, TOutput>(topic: string, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.Callback<Rabbitr.RpcSubscription>): Bluebird<Rabbitr.RpcSubscription>;
+  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.Callback<Rabbitr.RpcSubscription>): Bluebird<Rabbitr.RpcSubscription>;
 
-  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?, callback?: Rabbitr.ErrorCallback): Bluebird<void> {
+  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?, callback?: Rabbitr.Callback<Rabbitr.RpcSubscription>): Bluebird<Rabbitr.RpcSubscription> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
@@ -733,7 +741,14 @@ class Rabbitr {
       });
     });
 
-    return this.subscribe(rpcQueue, opts).asCallback(callback);
+    return this.subscribe(rpcQueue, opts).then<Rabbitr.RpcSubscription>(subscription => {
+      return {
+        destroy: () => {
+          this.off(rpcQueue);
+          return subscription.destroy();
+        },
+      };
+    }).asCallback(callback);
   }
 
   // message middleware support
@@ -825,6 +840,13 @@ declare module Rabbitr {
   export interface Middleware {
     // TODO - better annotation
     (message: IMessage<any>, cb: Function, next?: Function): void;
+  }
+
+  export interface EventSubscription {
+    destroy(): Bluebird<void>;
+  }
+  export interface RpcSubscription {
+    destroy(): Bluebird<void>;
   }
 }
 
