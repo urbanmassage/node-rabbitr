@@ -6,6 +6,7 @@
   "devDependencies": {
     "chai": "registry:npm/chai#3.5.0+20160402210230",
     "chalk": "registry:npm/chalk#1.0.0+20160211003958",
+    "node-uuid": "registry:npm/node-uuid#1.4.7+20160503013124",
     "object-assign": "registry:npm/object-assign#4.0.1+20160301180549"
   },
   "globalDependencies": {
@@ -13,7 +14,6 @@
   },
   "globalDevDependencies": {
     "mocha": "registry:dt/mocha#2.2.5+20160317120654",
-    "shortid": "registry:dt/shortid#0.0.0+20160316155526",
     "when": "registry:dt/when#2.4.0+20160317120654"
   }
 }

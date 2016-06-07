@@ -3,7 +3,7 @@ import {EventEmitter} from 'events';
 
 import amqplib = require('amqplib/callback_api');
 import objectAssign = require('object-assign');
-import shortId = require('shortid');
+import {v4} from 'node-uuid';
 import Bluebird = require('bluebird');
 
 const debug = require('debug')('rabbitr');
@@ -522,7 +522,7 @@ class Rabbitr extends EventEmitter {
     // this will send the data down the topic and then open up a unique return queue
     const rpcQueue = this._rpcQueueName(topic);
 
-    const unique = shortId.generate() + '_' + ((Math.round(new Date().getTime() / 1000) + '').substr(5));
+    const unique = v4() + '_' + ((Math.round(new Date().getTime() / 1000) + '').substr(5));
     const returnQueueName = `${rpcQueue}.return.${unique}`;
 
     const now = new Date().getTime();
