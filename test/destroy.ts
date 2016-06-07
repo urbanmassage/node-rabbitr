@@ -1,7 +1,7 @@
 import {expect} from 'chai';
 import Rabbitr = require('../');
 import Bluebird = require('bluebird');
-import shortId = require('shortid');
+import {v4} from 'node-uuid';
 
 const timesAsync = (times: number, fn: (step: number) => PromiseLike<any>) => {
   let step = (n: number) => {
@@ -14,8 +14,8 @@ const timesAsync = (times: number, fn: (step: number) => PromiseLike<any>) => {
 
 describe('rabbitr#destroy', function() {
   it('should be able to destroy an instance with pubsub listeners', function(done) {
-    const exchangeName = shortId.generate() + '.test';
-    const queueName = shortId.generate() + '.test';
+    const exchangeName = v4() + '.test';
+    const queueName = v4() + '.test';
 
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
@@ -34,7 +34,7 @@ describe('rabbitr#destroy', function() {
   });
 
   it('should be able to destroy an instance with rpc listeners', function(done) {
-    const channelName = shortId.generate() + '.rpc_test';
+    const channelName = v4() + '.rpc_test';
 
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
