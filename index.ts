@@ -99,7 +99,7 @@ class Rabbitr {
     this.eventListeners[eventName] = listener;
   }
 
-  private off(eventName: string) {
+  off(eventName: string) {
     if (!this.eventListeners[eventName]) {
       throw new Error(`Attempted to remove a non-existent event listener: ${eventName}`);
     }
