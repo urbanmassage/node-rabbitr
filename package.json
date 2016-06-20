@@ -27,7 +27,7 @@
   "devDependencies": {
     "chai": "^3.2.0",
     "codecov.io": "^0.1.6",
-    "istanbul": "^0.4.3",
+    "istanbul": "^0.4.4",
     "map-coverage": "0.0.3",
     "mocha": "^2.3.4",
     "source-map-support": "^0.4.0",
