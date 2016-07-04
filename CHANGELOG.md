@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 8.3.0
+- use node-uuid instead of shortid
+
 ## 8.2.3
 - critical bugfix in `subscribe`/`rpcListener` and durable queues
 
