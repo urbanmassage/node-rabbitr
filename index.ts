@@ -88,8 +88,6 @@ class Rabbitr extends EventEmitter {
   /** @deprecated */
   protected connected = false;
 
-  middleware = new Array<Rabbitr.Middleware>();
-
   protected connection: amqplib.Connection;
 
   constructor(opts: Rabbitr.IOptions) {
@@ -316,6 +314,7 @@ class Rabbitr extends EventEmitter {
               channel,
               ack,
               reject,
+              isRPC: false,
             };
 
             if (options && options.skipMiddleware) {
@@ -323,7 +322,7 @@ class Rabbitr extends EventEmitter {
               return null;
             }
 
-            this._runMiddleware(message).then(() => {
+            this.useMiddleware(message, () => {
               // TODO - how to handle common error function thing for middleware?
               this.emit(topic, message);
               return null;
@@ -667,69 +666,62 @@ class Rabbitr extends EventEmitter {
         shift: message.ack,
       };
 
+      message.isRPC = true;
+
       // TODO - how to handle common error function thing for middleware?
-      this._runMiddleware(message).then(() => {
-        return Bluebird.reduce( // run middleware
-            opts.middleware || [], (memo: void, middlewareFunc: Function) => {
-            return Bluebird.fromCallback<void>(callback => middlewareFunc(message, callback, (err, response) => {
-              callback(err || new MiddlewareResponse(response));
-            }));
-          }, null
+      this.useMiddleware(message, executor.bind(null, message))
+        .catch(error => {
+          // TODO - investigate why bluebird wraps the error here with an object
+          if (error && error.isOperational && error.cause) {
+            throw error.cause;
+          }
+          throw error;
+        })
+        .then<any>( // sanitize errors
+          (response: TOutput) => {
+            debug(`${yellow('rpcListener')} responding to topic ${cyan(topic)} with`, response);
+            return {response};
+          }, error => {
+            debug(`${yellow('rpcListener')} on topic ${cyan(topic)} ${red('hit error')}`, error);
+
+            var isError = error instanceof Error;
+            var errJSON = isError ?
+              stringifyError(error) :
+              JSON.stringify(error);
+
+            return {
+              error: errJSON,
+              isError,
+            };
+          }
         )
-          .then<TOutput>(() => // then executor
-            maybeFromCallback(executor.bind(null, message))
-          )
-          .catch(error => {
-            // TODO - investigate why bluebird wraps the error here with an object
-            if (error && error.isOperational && error.cause) {
-              throw error.cause;
-            }
-            throw error;
-          })
-          .catch(MiddlewareResponse, ({response}) => { // catch middleware responses
-            return response
-          })
-          .then<any>( // sanitize errors
-            response => {
-              debug(`${yellow('rpcListener')} responding to topic ${cyan(topic)} with`, response);
-              return {response};
-            }, error => {
-              debug(`${yellow('rpcListener')} on topic ${cyan(topic)} ${red('hit error')}`, error);
+        .then(data => { // send the response
+          // ack here - this will get ignored if the executor has acked or nacked already anyway
+          message.ack();
 
-              var isError = error instanceof Error;
-              var errJSON = isError ?
-                stringifyError(error) :
-                JSON.stringify(error);
-
-              return {
-                error: errJSON,
-                isError,
-              };
-            }
-          )
-          .then(data => { // send the response
-            // ack here - this will get ignored if the executor has acked or nacked already anyway
-            message.ack();
-
-            // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
-            this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify(data)), {
-              contentType: 'application/json',
-            });
-          }); // TODO - log uncaught errors at this stage? bluebird will do it anyway.
-      });
+          // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
+          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify(data)), {
+            contentType: 'application/json',
+          });
+        }); // TODO - log uncaught errors at this stage? bluebird will do it anyway.
     });
 
     return this.subscribe(rpcQueue, opts).asCallback(callback);
   }
 
   // message middleware support
-  use(middlewareFunc: Rabbitr.Middleware) {
-    this.middleware.push(middlewareFunc);
+  private middlewareFn = new Array<Rabbitr.Middleware>();
+
+  middleware(fn: Rabbitr.Middleware): void {
+    this.middlewareFn.push(fn);
   }
-  private _runMiddleware(message: Rabbitr.IMessage<any>): Bluebird<void> {
-    return Bluebird.reduce(this.middleware, (memo: void, middlewareFunc) => {
-      return Bluebird.fromCallback<void>(callback => middlewareFunc(message, callback));
-    }, null);
+
+  private useMiddleware(message: Rabbitr.IMessage<any>, next: () => PromiseLike<any>): Bluebird<any> {
+    return Bluebird.try(
+      this.middlewareFn.reduce<typeof next>(function(next, middlewareFn) {
+        return middlewareFn.bind(null, message, next) as typeof next;
+      }, next)
+    );
   }
 };
 
@@ -798,6 +790,8 @@ declare module Rabbitr {
     queue?: {
       shift: () => void;
     };
+
+    isRPC: boolean;
   }
 
   export interface IEnvelopedMessage<TData> extends IMessage<any> {
@@ -809,8 +803,7 @@ declare module Rabbitr {
   }
 
   export interface Middleware {
-    // TODO - better annotation
-    (message: IMessage<any>, cb: Function, next?: Function): void;
+    (fn: (message: IMessage<any>, next: () => Bluebird<any | void>) => PromiseLike<any | void>): void;
   }
 }
 
