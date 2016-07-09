@@ -1,8 +1,9 @@
+import Bluebird = require('bluebird');
 import Rabbitr = require('../');
 import {expect} from 'chai';
 import {v4} from 'node-uuid';
 
-describe('debug', function() {
+describe.only('debug', function() {
   afterEach(() => process.env.RABBITR_DEBUG = '');
 
   it('should not skip whitelisted rpc', () => {
@@ -14,14 +15,15 @@ describe('debug', function() {
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
+    after(() => rabbit.destroy());
 
-    const response = {test: 1};
+    const response = {test: 2};
 
     rabbit.rpcListener(queueName, message => {
-      return response;
+      return Bluebird.resolve(response);
     });
 
-    return rabbit.rpcExec(queueName, {})
+    return rabbit.rpcExec(queueName, {test: 1}, {timeout: 100})
       .then(res => {
         expect(res).to.deep.equal(response);
       });
@@ -35,12 +37,13 @@ describe('debug', function() {
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
+    after(() => rabbit.destroy());
 
     rabbit.rpcListener(queueName, message => {
       throw new Error('Got a message on non-whitelisted queue');
     });
 
-    return rabbit.rpcExec(queueName, {}, { timeout: 50 })
+    return rabbit.rpcExec(queueName, {}, {timeout: 100})
       .then(message => {
         expect.fail(message || true, void 0, 'Got a successful response somehow');
       }, err => {

@@ -322,7 +322,7 @@ class Rabbitr extends EventEmitter {
             data = parse(data);
           }
 
-          log(`got ${cyan(topic)}`, data);
+          log(`got a new message on ${cyan(topic)}`, data);
 
           const messageAcknowledgement = new Bluebird((ack: () => void, reject) => {
             const message: Rabbitr.IMessage<TMessage> = {
@@ -386,7 +386,6 @@ class Rabbitr extends EventEmitter {
         return Bluebird.fromCallback(callback =>
           channel.consume(this._formatName(topic), processMessage, {}, callback)
         ).catch(error => {
-          //
           // istanbul ignore next
           this.emit('error', error);
           throw error;
@@ -628,7 +627,6 @@ class Rabbitr extends EventEmitter {
           }
         ).catch(TimeoutError, error => {
           log(`request timeout firing for ${rpcQueue} to ${returnQueueName}`);
-          gotReply({}); // clean up so we don't have any unresolved promises left
           throw error;
         });
       });
