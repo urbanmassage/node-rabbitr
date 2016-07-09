@@ -192,7 +192,7 @@ class Rabbitr extends EventEmitter {
   }
 
   // istanbul ignore next
-  public whenReady(callback: Function) {
+  public whenReady(callback?: () => void) {
     return this.connectionPromise.then(() => void 0).asCallback(callback);
   }
 
@@ -245,7 +245,7 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
-      return this.whenReady(() =>
+      return this.whenReady().then(() =>
         this.send(topic, data, cb, opts)
       );
     }
@@ -282,7 +282,7 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
-      return this.whenReady(() =>
+      return this.whenReady().then(() =>
         this.subscribe(topic, opts, cb)
       );
     }
@@ -399,7 +399,7 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
-      return this.whenReady(() =>
+      return this.whenReady().then(() =>
         this.bindExchangeToQueue(exchange, queue, cb)
       );
     }
@@ -437,7 +437,7 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
-      return this.whenReady(() =>
+      return this.whenReady().then(() =>
         this.setTimer(topic, uniqueID, data, ttl, cb)
       );
     }
@@ -472,7 +472,7 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
-      return this.whenReady(() =>
+      return this.whenReady().then(() =>
         this.clearTimer(topic, uniqueID, cb)
       );
     }
@@ -524,7 +524,7 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
-      return this.whenReady(() =>
+      return this.whenReady().then(() =>
         this.rpcExec<TInput, TOutput>(topic, data, opts, cb)
       );
     }

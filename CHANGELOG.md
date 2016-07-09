@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## next
+- fixed a bug that caused the return value of `rpcExec` and other methods to always be `undefined` if called before the connection was established.
+
 ## 8.3.0
 - use node-uuid instead of shortid
 
