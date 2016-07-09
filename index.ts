@@ -73,18 +73,6 @@ class TimeoutError extends Error {
   }
 }
 
-/**
- * This is a helper class used to detect when a middleware wants to send a response to an RPC message.
- * The way we do this with promises is by throwing an instance of this class and the catching it.
- */
-class MiddlewareResponse extends Error {
-  response: any;
-  constructor(response) {
-    super();
-    this.response = response;
-  }
-}
-
 let HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = false;
 
 class Rabbitr {
