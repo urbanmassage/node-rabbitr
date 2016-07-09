@@ -31,7 +31,7 @@ describe('rabbitr#rpc', function() {
       // here we'll assert that the data is the same
       expect(message.data).to.deep.equal(testData);
 
-      message.queue.shift();
+      message.ack();
 
       cb(null, responseData);
     });
@@ -51,7 +51,7 @@ describe('rabbitr#rpc', function() {
     const error = new Error('Test');
 
     rabbit.rpcListener(queueName, function(message, cb) {
-      message.queue.shift();
+      message.ack();
       cb(error);
     });
 
@@ -77,7 +77,7 @@ describe('rabbitr#rpc', function() {
     const error = {a: 'b', c: 'd', name: 'Error', message: 'test'};
 
     rabbit.rpcListener(queueName, function(message, cb) {
-      message.queue.shift();
+      message.ack();
 
       cb(error);
     });
@@ -97,7 +97,7 @@ describe('rabbitr#rpc', function() {
     const data = 'Hello world!';
 
     rabbit.rpcListener(queueName, function(message, cb) {
-      message.queue.shift();
+      message.ack();
       expect(message.data).to.be.an.instanceOf(Buffer);
       expect(message.data.toString()).to.equal(data);
       cb(null, new Buffer(data));
@@ -116,7 +116,7 @@ describe('rabbitr#rpc', function() {
     const queueName = v4() + '.rpc_test';
 
     rabbit.rpcListener(queueName, function(message, cb) {
-      message.queue.shift();
+      message.ack();
       // No reply...
     });
 

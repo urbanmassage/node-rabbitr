@@ -659,11 +659,6 @@ class Rabbitr {
       const message: Rabbitr.IMessage<TInput> = <Rabbitr.IEnvelopedMessage<TInput> & Rabbitr.IMessage<TInput>>envelope;
       message.data = dataEnvelope.d;
 
-      // support for older clients - is this needed?
-      message.queue = {
-        shift: message.ack,
-      };
-
       message.isRPC = true;
 
       this.useMiddleware(message, executor.bind(null, message))
@@ -787,10 +782,6 @@ declare module Rabbitr {
     rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): Bluebird<any>;
     rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
     rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
-
-    queue?: {
-      shift: () => void;
-    };
 
     isRPC: boolean;
   }

@@ -11,7 +11,7 @@ RabbitMQ made easy for nodejs
 ```js
 var rabbit = new Rabbitr({
 	host: 'localhost',
-	queuePrefix: null // prefixed to every queue and exchange name
+	queuePrefix: null, // prefixed to every queue and exchange name
 });
 ```
 
@@ -23,7 +23,6 @@ rabbit.subscribe('sms.send.booking.create');
 rabbit.bindExchangeToQueue('booking.create', 'sms.send.booking.create');
 rabbit.on('sms.send.booking.create', function(message) {
 	// send an sms
-	message.ack();
 });
 
 // in another module
@@ -31,7 +30,9 @@ rabbit.subscribe('email.send.booking.create');
 rabbit.bindExchangeToQueue('booking.create', 'email.send.booking.create');
 rabbit.on('email.send.booking.create', function(message) {
 	// send an email
-	message.ack();
+
+	// you can also return a promise
+  return Promise.resolve();
 });
 
 // elsewhere
@@ -45,33 +46,30 @@ Rabbitr makes using dead letter exchanges dead easy
 // set timer
 rabbit.subscribe('booking.not-confirmed.timer.set');
 rabbit.bindExchangeToQueue('booking.create', 'booking.not-confirmed.timer.set');
-rabbit.on('booking.not-confirmed.timer.set', function(message) {
+rabbit.on('booking.not-confirmed.timer.set', message => {
 	// do something to calculate how long we want the timer to last
 	var timeFromNow = 900000; // 15 mins
 
 	rabbit.setTimer('booking.not-confirmed.timer.fire', message.data.id, {
-	    id: message.data.id
+    id: message.data.id
 	}, timeFromNow);
-
-	message.ack();
 });
 
 // clear timer if something has happened that means the timer action isn't required
 rabbit.subscribe('booking.not-confirmed.timer.clear');
 rabbit.bindExchangeToQueue('booking.confirm', 'booking.not-confirmed.timer.clear');
-rabbit.on('booking.not-confirmed.timer.clear', function(message) {
+rabbit.on('booking.not-confirmed.timer.clear', message => {
 	rabbit.clearTimer('booking.not-confirmed.timer.fire', message.data.id);
-
-	message.ack();
+  return Promise.resolve(); // optional
 });
 
 // handle the timer firing
 rabbit.subscribe('booking.not-confirmed.timer.fire');
 rabbit.bindExchangeToQueue('booking.not-confirmed.timer.fire', 'booking.not-confirmed.timer.fire');
-rabbit.on('booking.not-confirmed.timer.fire', function(message) {
+rabbit.on('booking.not-confirmed.timer.fire', message => {
 	// do something off the back of the timer firing
 	// in this example, message.data.id is the booking id that wasn't confirmed in time
-	message.ack();
+  return Promise.resolve(); // optional
 });
 ```
 
@@ -79,40 +77,28 @@ rabbit.on('booking.not-confirmed.timer.fire', function(message) {
 Use Rabbitr's RPC methods if you need to do something and get a response back, and you want to decouple the two processes via MQ
 
 - Make sure you use the same version of Rabbitr on both the worker and scheduler sides!
-- Note that we call message.queue.shift() rather than message.ack() to confirm processing for RPC methods - this is as Rabbitr's rpcListener method is set up so you can process in series, or immediately ask for another message to process in (kind of) parallel
 
-### Define the worker's method (series)
-
-```js
-rabbit.rpcListener('intelli-travel.directions', function(message, cb) {
-	// do something with message.data
-
-	cb(null, {
-	    rpc: 'is cool'
-	});
-});
-```
-
-### Define the worker's method (parallel, kind of)
+### Define the worker's method
 
 ```js
-rabbit.rpcListener('intelli-travel.directions', function(message, cb) {
-	message.queue.shift(); // immediately moves on to processing the next
+rabbit.rpcListener('intelli-travel.directions', message => {
 	// do something with message.data
 
-	cb(null, {
-	    rpc: 'is cool'
+	return Promise.resolve({
+    rpc: 'is cool'
 	});
-
-	message.queue.shift();
 });
 ```
 
 ### Calling the worker's RPC
 
 ```js
-rabbit.rpcExec('intelli-travel.directions', { some: 'data' }, function(err, message) {
-	// do something with message.data
-	// message.data will look like { rpc: 'is cool' }
-});
+rabbit.rpcExec('intelli-travel.directions', { some: 'data' })
+  .then(message => {
+    // do something with message.data
+    // message.data will look like { rpc: 'is cool' }
+  })
+  .catch(err => {
+    // handle errors
+  });
 ```
