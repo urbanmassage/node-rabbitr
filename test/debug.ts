@@ -9,7 +9,7 @@ describe('debug', function() {
     const queueName = v4() + '.rpc_test';
     const rpcQueueName = `rpc.${queueName}`;
 
-    process.env.RABBITR_DEBUG = `rpc.${queueName}`;
+    process.env.RABBITR_DEBUG = rpcQueueName;
 
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
@@ -22,8 +22,8 @@ describe('debug', function() {
     });
 
     return rabbit.rpcExec(queueName, {})
-      .then(message => {
-        expect(message.data).to.deep.equal(response);
+      .then(res => {
+        expect(res).to.deep.equal(response);
       });
   });
 
