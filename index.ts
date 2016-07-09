@@ -52,6 +52,14 @@ function parse(json: string): any {
   });
 }
 
+function bluebirdUnwrapRejection<T>(rejection: T): T;
+function bluebirdUnwrapRejection(rejection: any): any {
+  if (rejection && rejection.isOperational && rejection.cause) {
+    throw rejection.cause;
+  }
+  throw rejection;
+}
+
 class TimeoutError extends Error {
   topic: string;
   isRpc: boolean;
@@ -207,7 +215,7 @@ class Rabbitr {
             });
         });
       });
-    }).catch(function(error) {
+    }).catch(error => {
       // istanbul ignore next
       process.nextTick(() => { throw error; });
     });
@@ -219,9 +227,8 @@ class Rabbitr {
   }
 
   private _formatName(name: string) {
-    // istanbul ignore next
     if (this.opts.queuePrefix) {
-      name = this.opts.queuePrefix + '.' + name;
+      return this.opts.queuePrefix + '.' + name;
     }
 
     return name;
@@ -310,10 +317,7 @@ class Rabbitr {
 
     return Bluebird.fromCallback<amqplib.Channel>(callback =>
       this.connection.createChannel(callback)
-    ).catch(error => {
-      // istanbul ignore next
-      throw error;
-    }).then(channel => {
+    ).then(channel => {
       this._openChannels.push(channel);
 
       return Bluebird.fromCallback(callback =>
@@ -351,7 +355,6 @@ class Rabbitr {
             }
 
             this.useMiddleware(message, () => {
-              // TODO - how to handle common error function thing for middleware?
               this.trigger(topic, message);
               return null;
             });
@@ -389,10 +392,7 @@ class Rabbitr {
 
         return Bluebird.fromCallback(callback =>
           channel.consume(this._formatName(topic), processMessage, {}, callback)
-        ).catch(error => {
-          // istanbul ignore next
-          throw error;
-        });
+        );
       }).asCallback(cb);
     });
   }
@@ -410,19 +410,13 @@ class Rabbitr {
 
     return Bluebird.fromCallback<amqplib.Channel>(callback =>
       this.connection.createChannel(callback)
-    ).catch(error => {
-      // istanbul ignore next
-      throw error;
-    }).then(channel => {
+    ).then(channel => {
       channel.assertQueue(this._formatName(queue));
       channel.assertExchange(this._formatName(exchange), 'topic');
 
       return Bluebird.fromCallback(callback =>
         channel.bindQueue(this._formatName(queue), this._formatName(exchange), '*', {}, callback)
-      ).catch(error => {
-        // istanbul ignore next
-        throw error;
-      }).then(ok => {
+      ).then(ok => {
         return Bluebird.fromCallback(callback => channel.close(callback));
       });
     }).asCallback(cb);
@@ -455,10 +449,7 @@ class Rabbitr {
         },
         expires: (ttl + 1000)
       }, callback)
-    ).catch(error => {
-      // istanbul ignore next
-      throw error;
-    }).then(() => {
+    ).then(() => {
       this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
         contentType: 'application/json',
         // TODO - should we do anything with this?
@@ -567,10 +558,7 @@ class Rabbitr {
 
       return Bluebird.fromCallback(callback =>
         channel.consume(replyQueue, gotReply, {noAck: true}, callback)
-      ).catch(error => {
-        // istanbul ignore next
-        throw error;
-      }).then<TOutput>(() => {
+      ).then<TOutput>(() => {
         // send the request now
         const request = {
           d: data,
@@ -616,16 +604,12 @@ class Rabbitr {
             }
 
             return response;
-          }, error => {
-            // TODO - investigate why bluebird wraps the error here with an object
-            if (error && error.isOperational && error.cause) {
-              throw error.cause;
-            }
-            throw error;
-          }
+          },
+          // TODO - investigate why bluebird wraps the error here
+          //   with an object
+          bluebirdUnwrapRejection
         ).catch(TimeoutError, error => {
           debug(`request timeout firing for ${rpcQueue} to ${returnQueueName}`);
-          gotReply({}); // clean up so we don't have any unresolved promises left
           throw error;
         });
       });
@@ -665,8 +649,8 @@ class Rabbitr {
     this.on(rpcQueue, (envelope: Rabbitr.IEnvelopedMessage<TInput>) => {
       const dataEnvelope = envelope.data;
 
+      // discard expired messages
       const now = new Date().getTime();
-
       if (now > dataEnvelope.expiration) {
         envelope.ack();
         return;
@@ -682,15 +666,12 @@ class Rabbitr {
 
       message.isRPC = true;
 
-      // TODO - how to handle common error function thing for middleware?
       this.useMiddleware(message, executor.bind(null, message))
-        .catch(error => {
-          // TODO - investigate why bluebird wraps the error here with an object
-          if (error && error.isOperational && error.cause) {
-            throw error.cause;
-          }
-          throw error;
-        })
+        .catch(
+          // TODO - investigate why bluebird wraps the error here
+          //   with an object
+          bluebirdUnwrapRejection
+        )
         .then<any>( // sanitize errors
           (response: TOutput) => {
             debug(`${yellow('rpcListener')} responding to topic ${cyan(topic)} with`, response);
@@ -713,17 +694,22 @@ class Rabbitr {
           // ack here - this will get ignored if the executor has acked or nacked already anyway
           message.ack();
 
-          // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
-          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify(data)), {
-            contentType: 'application/json',
-          });
+          this._publishChannel.sendToQueue(
+            // doesn't need wrapping in this.formatName as the rpcExec function
+            //   already formats the return queue name as required
+            dataEnvelope.returnQueue,
+            new Buffer(stringify(data)),
+            {
+              contentType: 'application/json',
+            }
+          );
         }); // TODO - log uncaught errors at this stage? bluebird will do it anyway.
     });
 
     return this.subscribe(rpcQueue, opts).asCallback(callback);
   }
 
-  // message middleware support
+  // #region middleware
   private middlewareFn = new Array<Rabbitr.Middleware>();
 
   middleware(fn: Rabbitr.Middleware): void {
@@ -737,6 +723,7 @@ class Rabbitr {
       }, next)
     );
   }
+  // #endregion middleware
 };
 
 declare module Rabbitr {
