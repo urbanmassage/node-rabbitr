@@ -292,7 +292,7 @@ class Rabbitr extends EventEmitter {
     log(cyan('subscribe'), topic, options);
 
     if (
-      !(opts as any).isRPC &&
+      !(opts && (opts as any).isRPC) &&
       shouldSkipSubscribe(this.debugChannelsWhitelist, topic)
     ) {
       log(red('skipped'), cyan('subscribe'), topic);
