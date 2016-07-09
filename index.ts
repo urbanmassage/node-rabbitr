@@ -1,5 +1,4 @@
 import {cyan, red, yellow} from 'chalk';
-import {EventEmitter} from 'events';
 
 import amqplib = require('amqplib/callback_api');
 import objectAssign = require('object-assign');
@@ -80,7 +79,44 @@ class MiddlewareResponse extends Error {
 
 let HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = false;
 
-class Rabbitr extends EventEmitter {
+class Rabbitr {
+  private eventListeners: {
+    [eventName: string]: (message: Rabbitr.IMessage<any>) => void;
+  } = {};
+
+  on<Data>(eventName: string, listener: (message: Rabbitr.IMessage<Data>) => void): void;
+  on(eventName: string, listener: (message: Rabbitr.IMessage<any>) => void): void;
+
+  on(eventName: string, listener: (message: Rabbitr.IMessage<any>) => void): void {
+    if (this.eventListeners[eventName]) {
+      throw new Error(`Adding multiple listeners to the same event is not supported.`);
+    }
+
+    if (typeof listener !== 'function') {
+      throw new Error(`Invalid argument passed to Rabbitr#on: ${typeof listener}. Expected a function.`);
+    }
+
+    this.eventListeners[eventName] = listener;
+  }
+
+  private off(eventName: string) {
+    if (!this.eventListeners[eventName]) {
+      throw new Error(`Attempted to remove a non-existent event listener: ${eventName}`);
+    }
+    this.eventListeners[eventName] = null;
+  }
+
+  private trigger(eventName: string, message: Rabbitr.IMessage<any>) {
+    if (!this.eventListeners[eventName]) {
+      throw new Error(`Triggering an event without a listener: ${eventName}`);
+    }
+    this.eventListeners[eventName](message);
+  }
+
+  private removeAllListeners(): void {
+    this.eventListeners = {};
+  }
+
   opts: Rabbitr.IOptions;
 
   /** @deprecated */
@@ -91,8 +127,6 @@ class Rabbitr extends EventEmitter {
   protected connection: amqplib.Connection;
 
   constructor(opts: Rabbitr.IOptions) {
-    super();
-
     if (!HAS_WARNED_ABOUT_V8_BREAKING_CHANGE) {
       console.warn('Rabbitr has a major breaking change in version 8 - rpcListener queues are no longer durable. You will need to remove all rpcListener queues from RabbitMQ during deployment.')
       HAS_WARNED_ABOUT_V8_BREAKING_CHANGE =  true;
@@ -249,11 +283,6 @@ class Rabbitr extends EventEmitter {
     }).asCallback(cb);
   }
 
-  on(topic: string, cb: (data: Rabbitr.IMessage<any>) => void): this;
-  on<TData>(topic: string, cb: (data: Rabbitr.IMessage<TData>) => void): this;
-
-  /** @private */
-  on(topic: string, cb: (data: Rabbitr.IEnvelopedMessage<any>) => void): this;
 
   subscribe(topic: string, cb?: Rabbitr.Callback<any>): Bluebird<void>;
   subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): Bluebird<void>;
@@ -283,7 +312,6 @@ class Rabbitr extends EventEmitter {
       this.connection.createChannel(callback)
     ).catch(error => {
       // istanbul ignore next
-      this.emit('error', error);
       throw error;
     }).then(channel => {
       this._openChannels.push(channel);
@@ -318,13 +346,13 @@ class Rabbitr extends EventEmitter {
             };
 
             if (options && options.skipMiddleware) {
-              this.emit(topic, message);
+              this.trigger(topic, message);
               return null;
             }
 
             this.useMiddleware(message, () => {
               // TODO - how to handle common error function thing for middleware?
-              this.emit(topic, message);
+              this.trigger(topic, message);
               return null;
             });
           }).then(
@@ -350,12 +378,6 @@ class Rabbitr extends EventEmitter {
                 throw new TimeoutError({isRpc: false, topic});
               }),
           ]).catch(TimeoutError, error => {
-            this.emit('warning', {
-              type: 'ack.timeout',
-              queue: topic,
-              message: data,
-            });
-
             if (this.opts.autoAckOnTimeout === 'acknowledge') {
               channel.ack(msg);
             } else if (this.opts.autoAckOnTimeout === 'reject') {
@@ -368,9 +390,7 @@ class Rabbitr extends EventEmitter {
         return Bluebird.fromCallback(callback =>
           channel.consume(this._formatName(topic), processMessage, {}, callback)
         ).catch(error => {
-          //
           // istanbul ignore next
-          this.emit('error', error);
           throw error;
         });
       }).asCallback(cb);
@@ -392,7 +412,6 @@ class Rabbitr extends EventEmitter {
       this.connection.createChannel(callback)
     ).catch(error => {
       // istanbul ignore next
-      this.emit('error', error);
       throw error;
     }).then(channel => {
       channel.assertQueue(this._formatName(queue));
@@ -402,7 +421,6 @@ class Rabbitr extends EventEmitter {
         channel.bindQueue(this._formatName(queue), this._formatName(exchange), '*', {}, callback)
       ).catch(error => {
         // istanbul ignore next
-        this.emit('error', error);
         throw error;
       }).then(ok => {
         return Bluebird.fromCallback(callback => channel.close(callback));
@@ -439,7 +457,6 @@ class Rabbitr extends EventEmitter {
       }, callback)
     ).catch(error => {
       // istanbul ignore next
-      this.emit('error', error);
       throw error;
     }).then(() => {
       this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
@@ -527,8 +544,6 @@ class Rabbitr extends EventEmitter {
     const now = new Date().getTime();
 
     // bind the response queue
-    let processed = false;
-
     const channel = this._rpcReturnChannel;
 
     const queueDisposer = this._getTempQueue(this._formatName(returnQueueName), channel);
@@ -554,7 +569,6 @@ class Rabbitr extends EventEmitter {
         channel.consume(replyQueue, gotReply, {noAck: true}, callback)
       ).catch(error => {
         // istanbul ignore next
-        this.emit('error', error);
         throw error;
       }).then<TOutput>(() => {
         // send the request now
