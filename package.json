@@ -6,7 +6,6 @@
   "scripts": {
     "typings": "typings install && typings prune",
     "build": "tsc -p .",
-    "build-deploy": "tsc typings/index.d.ts index.ts --target es5 --module commonjs --declaration --sourceMap",
     "test": "mocha -gc",
     "coverage": "istanbul cover _mocha --",
     "postcoverage": "if [ -f coverage/lcov.info ]; then node node_modules/.bin/map-coverage && mv coverage/lcov.info coverage/lcov-raw.info && mv coverage/lcov-mapped.info coverage/lcov.info; fi",
@@ -17,22 +16,22 @@
   "author": "Giles Williams",
   "license": "ISC",
   "dependencies": {
-    "amqplib": "^0.4.1",
-    "bluebird": "^3.3.4",
+    "amqplib": "^0.4.2",
+    "bluebird": "^3.4.1",
     "chalk": "^1.1.3",
     "debug": "^2.2.0",
     "node-uuid": "^1.4.7",
-    "object-assign": "^4.0.1"
+    "object-assign": "^4.1.0"
   },
   "devDependencies": {
-    "chai": "^3.2.0",
+    "chai": "^3.5.0",
     "codecov.io": "^0.1.6",
-    "istanbul": "^0.4.3",
+    "istanbul": "^0.4.4",
     "map-coverage": "0.0.3",
-    "mocha": "^2.3.4",
-    "source-map-support": "^0.4.0",
+    "mocha": "^2.5.3",
+    "source-map-support": "^0.4.1",
     "typescript": "^1.8.10",
-    "typings": "^1.0.4"
+    "typings": "^1.3.1"
   },
   "typings": "index.d.ts",
   "directories": {

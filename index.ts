@@ -6,7 +6,7 @@ import objectAssign = require('object-assign');
 import {v4} from 'node-uuid';
 import Bluebird = require('bluebird');
 
-const debug = require('debug')('rabbitr');
+import {initWhitelist, shouldSkipSubscribe, log} from './lib/debug';
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
@@ -92,13 +92,23 @@ class Rabbitr extends EventEmitter {
 
   protected connection: amqplib.Connection;
 
+  /**
+   * An array of channel names used for debug mode. If this value is set, calls to
+   *   #subscribe on channels not in this list will be ignored.
+   *
+   * This option is set from the environment variable `RABBITR_DEBUG`.
+   */
+  private debugChannelsWhitelist: string[] | void;
+
   constructor(opts: Rabbitr.IOptions) {
     super();
 
     if (!HAS_WARNED_ABOUT_V8_BREAKING_CHANGE) {
       console.warn('Rabbitr has a major breaking change in version 8 - rpcListener queues are no longer durable. You will need to remove all rpcListener queues from RabbitMQ during deployment.')
-      HAS_WARNED_ABOUT_V8_BREAKING_CHANGE =  true;
+      HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = true;
     }
+
+    this.debugChannelsWhitelist = initWhitelist();
 
     this.opts = objectAssign(<Rabbitr.IOptions>{
       url: '',
@@ -131,9 +141,9 @@ class Rabbitr extends EventEmitter {
   private connectionPromise: Bluebird<amqplib.Connection>;
 
   private _connect() {
-    debug('#connect');
+    log('#connect');
 
-    debug(`using connection url ${yellow(this.opts.url)}`);
+    log(`using connection url ${yellow(this.opts.url)}`);
 
     this.connectionPromise = Bluebird.fromCallback<amqplib.Connection>(callback =>
       amqplib.connect(this.opts.url, this.opts.connectionOpts, callback)
@@ -167,7 +177,7 @@ class Rabbitr extends EventEmitter {
           this.connection = conn;
           this.connected = true;
 
-          debug('ready');
+          log('ready');
           return maybeFromCallback<void>(this.opts.setup || (() => Bluebird.resolve()))
             .then(() => {
               this.ready = true;
@@ -197,14 +207,14 @@ class Rabbitr extends EventEmitter {
 
   // method to destroy anything for this instance of rabbitr
   destroy(cb?: Rabbitr.ErrorCallback): Bluebird<void> {
-    debug('destroying');
+    log('destroying');
     return Bluebird.each(this._openChannels, channel => {
       return Bluebird.fromCallback(callback => channel.close(callback))
         .then(
-          () => debug('channel closed'),
+          () => log('channel closed'),
           err => {
             // istanbul ignore next
-            debug('Error while closing connection', err);
+            log('Error while closing connection', err);
             throw err;
           }
         );
@@ -213,13 +223,13 @@ class Rabbitr extends EventEmitter {
         this.connection.close(callback)
       ).then(
         () => {
-          debug('connection closed');
+          log('connection closed');
           this.removeAllListeners();
           this.connectionPromise = null;
         },
         err => {
         // istanbul ignore next
-          debug('Error while closing connection', err);
+          log('Error while closing connection', err);
           throw err;
         }
       );
@@ -240,7 +250,7 @@ class Rabbitr extends EventEmitter {
       );
     }
 
-    debug(yellow('send'), topic, data, opts);
+    log(yellow('send'), topic, data, opts);
 
     return Bluebird.fromCallback(callback =>
       this._publishChannel.assertExchange(this._formatName(topic), 'topic', {}, callback)
@@ -279,7 +289,14 @@ class Rabbitr extends EventEmitter {
 
     const options: Rabbitr.ISubscribeOptions = opts;
 
-    debug(cyan('subscribe'), topic, options);
+    log(cyan('subscribe'), topic, options);
+
+    if (
+      shouldSkipSubscribe(this.debugChannelsWhitelist, topic)
+    ) {
+      log(red('skipped'), cyan('subscribe'), topic);
+      return Bluebird.resolve();
+    }
 
     return Bluebird.fromCallback<amqplib.Channel>(callback =>
       this.connection.createChannel(callback)
@@ -305,7 +322,7 @@ class Rabbitr extends EventEmitter {
             data = parse(data);
           }
 
-          debug(`got ${cyan(topic)}`, data);
+          log(`got a new message on ${cyan(topic)}`, data);
 
           const messageAcknowledgement = new Bluebird((ack: () => void, reject) => {
             const message: Rabbitr.IMessage<TMessage> = {
@@ -331,12 +348,12 @@ class Rabbitr extends EventEmitter {
           }).then(
             // acknowledged
             () => {
-              debug(`acknowledging message ${cyan(topic)}`, data);
+              log(`acknowledging message ${cyan(topic)}`, data);
               channel.ack(msg);
             },
             // rejected
             error => {
-              debug(`rejecting message ${cyan(topic)}`, data, error);
+              log(`rejecting message ${cyan(topic)}`, data, error);
               console.error(error && error.stack || error);
               channel.nack(msg);
             }
@@ -369,7 +386,6 @@ class Rabbitr extends EventEmitter {
         return Bluebird.fromCallback(callback =>
           channel.consume(this._formatName(topic), processMessage, {}, callback)
         ).catch(error => {
-          //
           // istanbul ignore next
           this.emit('error', error);
           throw error;
@@ -387,7 +403,7 @@ class Rabbitr extends EventEmitter {
       );
     }
 
-    debug(cyan('bindExchangeToQueue'), exchange, queue);
+    log(cyan('bindExchangeToQueue'), exchange, queue);
 
     return Bluebird.fromCallback<amqplib.Channel>(callback =>
       this.connection.createChannel(callback)
@@ -427,7 +443,7 @@ class Rabbitr extends EventEmitter {
 
     var timerQueue = this._timerQueueName(topic, uniqueID);
 
-    debug(yellow('setTimer'), topic, uniqueID, data);
+    log(yellow('setTimer'), topic, uniqueID, data);
 
     return Bluebird.fromCallback(callback =>
       this._timerChannel.assertQueue(this._formatName(timerQueue), {
@@ -462,7 +478,7 @@ class Rabbitr extends EventEmitter {
 
     var timerQueue = this._timerQueueName(topic, uniqueID);
 
-    debug(yellow('clearTimer'), timerQueue);
+    log(yellow('clearTimer'), timerQueue);
 
     return Bluebird.fromCallback(callback =>
       this._timerChannel.deleteQueue(timerQueue, {}, callback)
@@ -475,7 +491,7 @@ class Rabbitr extends EventEmitter {
   }
 
   private _getTempQueue(queueName: string, channel: amqplib.Channel) {
-    debug(`creating temp queue ${cyan(queueName)}`)
+    log(`creating temp queue ${cyan(queueName)}`)
     return Bluebird.fromCallback<amqplib.Replies.AssertQueue>(callback =>
       channel.assertQueue(queueName, {
         exclusive: true,
@@ -483,7 +499,7 @@ class Rabbitr extends EventEmitter {
         durable: false,
       }, callback)
     ).disposer(() => {
-      debug(`deleting temp queue ${cyan(queueName)}`);
+      log(`deleting temp queue ${cyan(queueName)}`);
       return Bluebird.fromCallback<void>(callback =>
         // delete the return queue and close exc channel
         channel.deleteQueue(queueName) && 0 || callback(null)
@@ -493,7 +509,7 @@ class Rabbitr extends EventEmitter {
         console.log(`rabbitr temp queue '${cyan(queueName)}' cleanup exception`, error && error.stack || error);
         throw error;
       }).then(() => {
-        debug(`deleted temp queue ${cyan(queueName)}`);
+        log(`deleted temp queue ${cyan(queueName)}`);
       });
     });
   }
@@ -503,7 +519,7 @@ class Rabbitr extends EventEmitter {
   rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
 
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
@@ -516,7 +532,7 @@ class Rabbitr extends EventEmitter {
     if ('function' === typeof opts) {
       // shift arguments
       cb = <Rabbitr.Callback<TOutput>>opts;
-      opts = <Rabbitr.IRpcExecOptions>{};
+      opts = null;
     }
 
     // this will send the data down the topic and then open up a unique return queue
@@ -528,16 +544,15 @@ class Rabbitr extends EventEmitter {
     const now = new Date().getTime();
 
     // bind the response queue
-    let processed = false;
 
     const channel = this._rpcReturnChannel;
 
     const queueDisposer = this._getTempQueue(this._formatName(returnQueueName), channel);
 
     return Bluebird.using(queueDisposer, () => {
-      debug(`using rpc return queue ${cyan(returnQueueName)}`);
+      log(`using rpc return queue ${cyan(returnQueueName)}`);
 
-      const timeoutMS = (opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
+      const timeoutMS = (opts && opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
 
       const replyQueue = this._formatName(returnQueueName);
 
@@ -546,7 +561,7 @@ class Rabbitr extends EventEmitter {
         .fromCallback<amqplib.Message>(callback => { replyCallback = callback; });
       let gotReply = function(msg) {
         if (!msg) return;
-        debug(`got rpc reply on ${cyan(replyQueue)}`);
+        log(`got rpc reply on ${cyan(replyQueue)}`);
 
         replyCallback(null, msg);
       }
@@ -565,7 +580,7 @@ class Rabbitr extends EventEmitter {
           expiration: now + timeoutMS,
         };
 
-        debug('sending rpc request');
+        log('sending rpc request');
         this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(request)), {
           contentType: 'application/json',
           expiration: `${timeoutMS}`,
@@ -611,8 +626,7 @@ class Rabbitr extends EventEmitter {
             throw error;
           }
         ).catch(TimeoutError, error => {
-          debug(`request timeout firing for ${rpcQueue} to ${returnQueueName}`);
-          gotReply({}); // clean up so we don't have any unresolved promises left
+          log(`request timeout firing for ${rpcQueue} to ${returnQueueName}`);
           throw error;
         });
       });
@@ -644,10 +658,7 @@ class Rabbitr extends EventEmitter {
 
     var rpcQueue = this._rpcQueueName(topic);
 
-    (<any>opts).skipMiddleware = true;
-    (<any>opts).durable = false;
-
-    debug(`has rpcListener for ${topic}`);
+    log(`has rpcListener for ${topic}`);
 
     this.on(rpcQueue, (envelope: Rabbitr.IEnvelopedMessage<TInput>) => {
       const dataEnvelope = envelope.data;
@@ -691,10 +702,10 @@ class Rabbitr extends EventEmitter {
           })
           .then<any>( // sanitize errors
             response => {
-              debug(`${yellow('rpcListener')} responding to topic ${cyan(topic)} with`, response);
+              log(`${yellow('rpcListener')} responding to topic ${cyan(topic)} with`, response);
               return {response};
             }, error => {
-              debug(`${yellow('rpcListener')} on topic ${cyan(topic)} ${red('hit error')}`, error);
+              log(`${yellow('rpcListener')} on topic ${cyan(topic)} ${red('hit error')}`, error);
 
               var isError = error instanceof Error;
               var errJSON = isError ?
@@ -719,7 +730,12 @@ class Rabbitr extends EventEmitter {
       });
     });
 
-    return this.subscribe(rpcQueue, opts).asCallback(callback);
+    return this.subscribe(rpcQueue,
+      objectAssign({}, opts, {
+        skipMiddleware: true,
+        durable: false,
+      })
+    ).asCallback(callback);
   }
 
   // message middleware support

@@ -116,3 +116,20 @@ rabbit.rpcExec('intelli-travel.directions', { some: 'data' }, function(err, mess
 	// message.data will look like { rpc: 'is cool' }
 });
 ```
+
+## Debugging
+
+To debug rabbitr, you can enable logging by setting the environment variable
+`DEBUG` to "rabbitr".
+
+You can also tell rabbitr to only listen on one or few queues using the
+environment variable `RABBITR_DEBUG`. Just set it to a comma-separated list of
+queues names. RPC queues have the prefix `rpc.`.
+
+```bash
+# To enable logging
+DEBUG=rabbitr node .
+
+# To only listen on rpc channels `user.create` and `user.update`
+RABBITR_DEBUG=rpc.user.create,rpc.user.update node .
+```
