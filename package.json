@@ -6,7 +6,6 @@
   "scripts": {
     "typings": "typings install && typings prune",
     "build": "tsc -p .",
-    "build-deploy": "tsc typings/index.d.ts index.ts --target es5 --module commonjs --declaration --sourceMap",
     "test": "mocha -gc",
     "coverage": "istanbul cover _mocha --",
     "postcoverage": "if [ -f coverage/lcov.info ]; then node node_modules/.bin/map-coverage && mv coverage/lcov.info coverage/lcov-raw.info && mv coverage/lcov-mapped.info coverage/lcov.info; fi",

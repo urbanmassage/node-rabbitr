@@ -9,10 +9,10 @@ services:
 - rabbitmq
 script:
 - npm run typings
-- npm run build
+- npm run build -- --declaration
 - npm test
 after_success:
-- test $TRAVIS_NODE_VERSION = "5.10" && npm run coverage && npm run sendcoverage && npm run build-deploy
+- test $TRAVIS_NODE_VERSION = "5.10" && npm run coverage && npm run sendcoverage
 notifications:
   hipchat:
     rooms:
