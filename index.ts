@@ -92,12 +92,27 @@ class Rabbitr extends EventEmitter {
 
   protected connection: amqplib.Connection;
 
+  /**
+   * An array of channel names used for debug mode. If this value is set, calls to
+   *   #subscribe on channels not in this list will be ignored.
+   *
+   * This option is set from the environment variable `RABBITR_DEBUG`.
+   */
+  private debugChannelsWhitelist: string[];
+
   constructor(opts: Rabbitr.IOptions) {
     super();
 
     if (!HAS_WARNED_ABOUT_V8_BREAKING_CHANGE) {
       console.warn('Rabbitr has a major breaking change in version 8 - rpcListener queues are no longer durable. You will need to remove all rpcListener queues from RabbitMQ during deployment.')
-      HAS_WARNED_ABOUT_V8_BREAKING_CHANGE =  true;
+      HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = true;
+    }
+
+    const {RABBITR_DEBUG} = process.env;
+    if (RABBITR_DEBUG) {
+      const channelsWhitelist = RABBITR_DEBUG.split(',');
+      console.warn('[warning] Rabbitr is running in debug mode. Only the following channels will be subscribed to:', channelsWhitelist.join('\n'));
+      this.debugChannelsWhitelist = channelsWhitelist;
     }
 
     this.opts = objectAssign(<Rabbitr.IOptions>{
@@ -280,6 +295,13 @@ class Rabbitr extends EventEmitter {
     const options: Rabbitr.ISubscribeOptions = opts;
 
     debug(cyan('subscribe'), topic, options);
+
+    if (this.debugChannelsWhitelist && !(opts as any).isRPC) {
+      if (this.debugChannelsWhitelist.indexOf(topic) === -1) {
+        debug(red('skipped'), cyan('subscribe'), topic);
+        return Bluebird.resolve();
+      }
+    }
 
     return Bluebird.fromCallback<amqplib.Channel>(callback =>
       this.connection.createChannel(callback)
@@ -644,9 +666,6 @@ class Rabbitr extends EventEmitter {
 
     var rpcQueue = this._rpcQueueName(topic);
 
-    (<any>opts).skipMiddleware = true;
-    (<any>opts).durable = false;
-
     debug(`has rpcListener for ${topic}`);
 
     this.on(rpcQueue, (envelope: Rabbitr.IEnvelopedMessage<TInput>) => {
@@ -719,7 +738,13 @@ class Rabbitr extends EventEmitter {
       });
     });
 
-    return this.subscribe(rpcQueue, opts).asCallback(callback);
+    return this.subscribe(rpcQueue,
+      objectAssign({}, opts, {
+        skipMiddleware: true,
+        durable: false,
+        isRPC: true,
+      })
+    ).asCallback(callback);
   }
 
   // message middleware support
