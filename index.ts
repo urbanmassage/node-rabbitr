@@ -292,7 +292,6 @@ class Rabbitr extends EventEmitter {
     log(cyan('subscribe'), topic, options);
 
     if (
-      !(opts && (opts as any).isRPC) &&
       shouldSkipSubscribe(this.debugChannelsWhitelist, topic)
     ) {
       log(red('skipped'), cyan('subscribe'), topic);
@@ -738,7 +737,6 @@ class Rabbitr extends EventEmitter {
       objectAssign({}, opts, {
         skipMiddleware: true,
         durable: false,
-        isRPC: true,
       })
     ).asCallback(callback);
   }
