@@ -27,7 +27,7 @@ describe('debug', function() {
       });
   });
 
-  it('should skip non-whitelisted rpc', function(done) {
+  it('should skip non-whitelisted rpc', () => {
     const queueName = v4() + '.rpc_test';
 
     process.env.RABBITR_DEBUG = `rpc.test.1234`;

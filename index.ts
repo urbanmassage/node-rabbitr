@@ -520,7 +520,7 @@ class Rabbitr extends EventEmitter {
   rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
 
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
@@ -533,7 +533,7 @@ class Rabbitr extends EventEmitter {
     if ('function' === typeof opts) {
       // shift arguments
       cb = <Rabbitr.Callback<TOutput>>opts;
-      opts = <Rabbitr.IRpcExecOptions>{};
+      opts = null;
     }
 
     // this will send the data down the topic and then open up a unique return queue
@@ -545,7 +545,6 @@ class Rabbitr extends EventEmitter {
     const now = new Date().getTime();
 
     // bind the response queue
-    let processed = false;
 
     const channel = this._rpcReturnChannel;
 
@@ -554,7 +553,7 @@ class Rabbitr extends EventEmitter {
     return Bluebird.using(queueDisposer, () => {
       log(`using rpc return queue ${cyan(returnQueueName)}`);
 
-      const timeoutMS = (opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
+      const timeoutMS = (opts && opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
 
       const replyQueue = this._formatName(returnQueueName);
 
