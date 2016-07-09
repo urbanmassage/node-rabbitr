@@ -17,8 +17,8 @@ describe('debug', function() {
 
     const response = {test: 1};
 
-    rabbit.rpcListener(queueName, function(message, cb) {
-      cb(null, response);
+    rabbit.rpcListener(queueName, message => {
+      return response;
     });
 
     return rabbit.rpcExec(queueName, {})
@@ -36,13 +36,13 @@ describe('debug', function() {
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
 
-    rabbit.rpcListener(queueName, function (message, cb) {
-      cb(new Error('Got a message on non-whitelisted queue'));
+    rabbit.rpcListener(queueName, message => {
+      throw new Error('Got a message on non-whitelisted queue');
     });
 
     return rabbit.rpcExec(queueName, {}, { timeout: 50 })
       .then(message => {
-        expect.fail('Got a successful response somehow');
+        expect.fail(message || true, void 0, 'Got a successful response somehow');
       }, err => {
         expect(err).to.be.an.instanceOf(Error);
         expect(err).to.have.property('name').that.equals('TimeoutError');

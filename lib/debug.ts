@@ -4,7 +4,10 @@ export function initWhitelist(): string[] | void {
   const {RABBITR_DEBUG} = process.env;
   if (RABBITR_DEBUG) {
     const channelsWhitelist = RABBITR_DEBUG.split(',');
-    console.warn('[warning] Rabbitr is running in debug mode. Only the following channels will be subscribed to:', channelsWhitelist.join('\n'));
+    console.warn(
+      '[warning] Rabbitr is running in debug mode. It will only subscribe to ' +
+      'the following channels:\n' + channelsWhitelist.join('\n')
+    );
     return channelsWhitelist;
   }
   return null;
