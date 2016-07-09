@@ -3,7 +3,7 @@ import Rabbitr = require('../');
 import {expect} from 'chai';
 import {v4} from 'node-uuid';
 
-describe.only('debug', function() {
+describe('debug', function() {
   afterEach(() => process.env.RABBITR_DEBUG = '');
 
   it('should not skip whitelisted rpc', () => {
@@ -50,5 +50,58 @@ describe.only('debug', function() {
         expect(err).to.be.an.instanceOf(Error);
         expect(err).to.have.property('name').that.equals('TimeoutError');
       });
+  });
+
+  it('should not skip whitelisted pubsub', () => {
+    const queueName = v4() + '.pubsub_test';
+
+    process.env.RABBITR_DEBUG = queueName;
+
+    const rabbit = new Rabbitr({
+      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+    });
+    after(() => rabbit.destroy());
+
+    const data = {test: 15};
+
+    return Bluebird.all([
+      rabbit.subscribe(queueName),
+      rabbit.bindExchangeToQueue(queueName, queueName),
+    ]).then(() =>
+      Bluebird.all([
+        new Bluebird<any>(resolve => {
+          rabbit.on(queueName, resolve);
+        }).then(message => {
+          expect(message.data).to.deep.equal(data);
+        }),
+        rabbit.send(queueName, data),
+      ])
+    );
+  });
+
+  it('should skip non-whitelisted pubsub', () => {
+    const queueName = v4() + '.pubsub_test';
+
+    process.env.RABBITR_DEBUG = `rpc.test.1234`;
+
+    const rabbit = new Rabbitr({
+      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+    });
+    after(() => rabbit.destroy());
+
+    return Bluebird.all([
+      rabbit.subscribe(queueName),
+      rabbit.bindExchangeToQueue(queueName, queueName),
+    ]).then(() =>
+      Bluebird.all([
+        Bluebird.race([
+          new Bluebird<any>((resolve, reject) => {
+            rabbit.on(queueName, reject);
+          }),
+          Bluebird.delay(100),
+        ]),
+        rabbit.send(queueName, {}),
+      ])
+    );
   });
 });
