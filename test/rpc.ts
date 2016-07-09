@@ -65,7 +65,7 @@ describe('rabbitr#rpc', function() {
         expect(err).to.have.property(key).that.is.deep.equal(error[key]);
       });
 
-      expect(err).to.have.property('stack').that.has.string(error.stack);
+      expect(err).to.have.property('stack').that.has.string((error as any).stack);
 
       done();
     });
