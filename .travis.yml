@@ -1,8 +1,8 @@
 language: node_js
 node_js:
-- '5.10'
-- '4.1'
-- '4.0'
+- '6'
+- '5'
+- '4'
 - '0.12'
 - '0.10'
 services:
@@ -12,7 +12,7 @@ script:
 - npm run build
 - npm test
 after_success:
-- test $TRAVIS_NODE_VERSION = "5.10" && npm run coverage && npm run sendcoverage && npm run build-deploy
+- test $TRAVIS_NODE_VERSION = "6" && npm run coverage && npm run sendcoverage && npm run build-deploy
 notifications:
   email:
     on_success: change
