@@ -645,10 +645,9 @@ class Rabbitr extends EventEmitter {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
-      this.whenReady(() => {
-        return this.rpcListener(topic, opts, executor);
-      });
-      return;
+      return this.whenReady().then(() =>
+        this.rpcListener(topic, opts, executor)
+      );
     }
 
     // istanbul ignore next
