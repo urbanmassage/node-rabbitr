@@ -109,6 +109,26 @@ class Rabbitr extends EventEmitter {
 
   private connectionPromise: Bluebird<amqplib.Connection>;
 
+  private isShuttingDown: boolean = false;
+  private pendingMessagesCount: number = 0;
+  private shutdown = () => {
+    this.isShuttingDown = true;
+    this.postMessage();
+    log(`${red('shutting down')}`);
+  };
+
+  private postMessage() {
+    if (this.isShuttingDown) {
+      if (this.pendingMessagesCount) {
+        // wait
+        log(`we have ${yellow(this.pendingMessagesCount + '')} pending messsges`);
+      } else {
+        log(`closing connection`);
+        this.connectionPromise.value().close();
+      }
+    }
+  }
+
   private _connect() {
     log('#connect');
 
@@ -118,12 +138,14 @@ class Rabbitr extends EventEmitter {
       amqplib.connect(this.opts.url, this.opts.connectionOpts, callback)
     ).then(conn => {
       // make sure to close the connection if the process terminates
-      let close = () => conn.close();
-      process.once('SIGINT', close);
+      process.once('SIGINT', this.shutdown);
 
       conn.on('close', () => {
-        process.removeListener('SIGINT', close);
-        throw new Error('Disconnected from RabbitMQ');
+        process.removeListener('SIGINT', this.shutdown);
+        if (!this.isShuttingDown) {
+          throw new Error('Disconnected from RabbitMQ');
+        }
+        log(`connection closed`);
       });
 
       return Bluebird.fromCallback<amqplib.Channel>(callback =>
@@ -285,6 +307,11 @@ class Rabbitr extends EventEmitter {
 
         const processMessage = (msg: any) => {
           if (!msg) return;
+          if (this.isShuttingDown) {
+            log(`${red('rejected')} message on topic ${yellow(topic)} because we're shutting down`);
+            channel.nack(msg);
+            return;
+          }
 
           var data = msg.content.toString();
           if (msg.properties.contentType === 'application/json') {
@@ -328,6 +355,8 @@ class Rabbitr extends EventEmitter {
             }
           );
 
+          ++ this.pendingMessagesCount;
+
           // Add a timeout
           return Bluebird.race([
             messageAcknowledgement,
@@ -349,6 +378,9 @@ class Rabbitr extends EventEmitter {
               channel.nack(msg);
             }
             return null;
+          }).then(() => {
+            -- this.pendingMessagesCount;
+            this.postMessage();
           });
         };
 
