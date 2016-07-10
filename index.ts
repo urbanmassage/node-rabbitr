@@ -569,12 +569,12 @@ class Rabbitr extends EventEmitter {
       let replyCallback: Function;
       const replyPromise = Bluebird
         .fromCallback<amqplib.Message>(callback => { replyCallback = callback; });
-      let gotReply = function(msg) {
+      let gotReply = msg => {
         if (!msg) return;
         this.log(`got rpc reply on ${cyan(replyQueue)}`);
 
         replyCallback(null, msg);
-      }
+      };
 
       return Bluebird.fromCallback(callback =>
         channel.consume(replyQueue, gotReply, {noAck: true}, callback)

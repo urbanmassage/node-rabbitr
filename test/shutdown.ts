@@ -3,7 +3,7 @@ import Rabbitr = require('../');
 import {expect} from 'chai';
 import {v4} from 'node-uuid';
 
-describe.only('shutdown', function() {
+describe('shutdown', function() {
   it('should skip rpc after shutdown is triggered', () => {
     const queueName = v4() + '.rpc_test';
 
