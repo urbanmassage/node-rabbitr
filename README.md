@@ -11,7 +11,7 @@ RabbitMQ made easy for nodejs
 ```js
 var rabbit = new Rabbitr({
 	host: 'localhost',
-	queuePrefix: null // prefixed to every queue and exchange name
+	queuePrefix: null, // prefixed to every queue and exchange name
 });
 ```
 
@@ -50,7 +50,7 @@ rabbit.on('booking.not-confirmed.timer.set', function(message) {
 	var timeFromNow = 900000; // 15 mins
 
 	rabbit.setTimer('booking.not-confirmed.timer.fire', message.data.id, {
-	    id: message.data.id
+    id: message.data.id,
 	}, timeFromNow);
 
 	message.ack();
@@ -78,17 +78,16 @@ rabbit.on('booking.not-confirmed.timer.fire', function(message) {
 ## RPC (remote procedure call)
 Use Rabbitr's RPC methods if you need to do something and get a response back, and you want to decouple the two processes via MQ
 
-- Make sure you use the same version of Rabbitr on both the worker and scheduler sides!
-- Note that we call message.queue.shift() rather than message.ack() to confirm processing for RPC methods - this is as Rabbitr's rpcListener method is set up so you can process in series, or immediately ask for another message to process in (kind of) parallel
+- Make sure you use the same major version of Rabbitr on both the worker and scheduler sides!
 
 ### Define the worker's method (series)
 
 ```js
-rabbit.rpcListener('intelli-travel.directions', function(message, cb) {
+rabbit.rpcListener('rpc-test', function(message, cb) {
 	// do something with message.data
 
 	cb(null, {
-	    rpc: 'is cool'
+    rpc: 'is cool'
 	});
 });
 ```
@@ -96,24 +95,24 @@ rabbit.rpcListener('intelli-travel.directions', function(message, cb) {
 ### Define the worker's method (parallel, kind of)
 
 ```js
-rabbit.rpcListener('intelli-travel.directions', function(message, cb) {
-	message.queue.shift(); // immediately moves on to processing the next
+rabbit.rpcListener('rpc-test', function(message, cb) {
+	// immediately moves on to processing the next
+	message.ack();
+
 	// do something with message.data
 
 	cb(null, {
-	    rpc: 'is cool'
+    rpc: 'is cool'
 	});
-
-	message.queue.shift();
 });
 ```
 
 ### Calling the worker's RPC
 
 ```js
-rabbit.rpcExec('intelli-travel.directions', { some: 'data' }, function(err, message) {
-	// do something with message.data
-	// message.data will look like { rpc: 'is cool' }
+rabbit.rpcExec('rpc-test', { some: 'data' }, function(err, response) {
+	// do something with `response`
+	// it will look like { rpc: 'is cool' }
 });
 ```
 

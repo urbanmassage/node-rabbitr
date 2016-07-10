@@ -7,21 +7,9 @@ import {v4} from 'node-uuid';
 import Bluebird = require('bluebird');
 
 import {initWhitelist, shouldSkipSubscribe, log} from './lib/debug';
+import {stringify, stringifyError, parse, parseError} from './lib/serialization';
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
-
-// istanbul ignore next
-if (parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) < 0.4) {
-  // Monkey-patch :(
-  // https://github.com/nodejs/node-v0.x-archive/issues/5110
-  Buffer.prototype.toJSON = function() {
-    return { type: 'Buffer', data: Array.prototype.slice.call(this, 0) };
-  };
-}
-
-function stringify(obj: any): string {
-  return JSON.stringify(obj);
-}
 
 function maybeFromCallback<T>(fn: ((done: Rabbitr.Callback<T>) => void) | (() => PromiseLike<T>)): Bluebird<T> {
   let callback: Rabbitr.Callback<T>;
@@ -32,25 +20,6 @@ function maybeFromCallback<T>(fn: ((done: Rabbitr.Callback<T>) => void) | (() =>
     return Bluebird.resolve(val);
   }
   return promise;
-}
-
-// helper function to properly stringify an error object
-function stringifyError(err, filter?, space?) {
-  var plainObject = {
-    stack: err.stack,
-  };
-  Object.getOwnPropertyNames(err).forEach(function(key) {
-    plainObject[key] = err[key];
-  });
-  return JSON.stringify(plainObject, filter, space);
-}
-
-function parse(json: string): any {
-  return JSON.parse(json, function(key, value) {
-    return value && value.type === 'Buffer'
-      ? new Buffer(value.data)
-      : value;
-  });
 }
 
 class TimeoutError extends Error {
@@ -192,11 +161,11 @@ class Rabbitr extends EventEmitter {
   }
 
   // istanbul ignore next
-  public whenReady(callback?: () => void) {
-    return this.connectionPromise.then(() => void 0).asCallback(callback);
+  public whenReady(callback?: () => void): Bluebird<void> {
+    return this.connectionPromise.then<void>(() => void 0).asCallback(callback);
   }
 
-  private _formatName(name: string) {
+  private _formatName(name: string): string {
     // istanbul ignore next
     if (this.opts.queuePrefix) {
       name = this.opts.queuePrefix + '.' + name;
@@ -603,18 +572,11 @@ class Rabbitr extends EventEmitter {
             const response: TOutput = data.response;
 
             if (error) {
-              error = JSON.parse(error);
               if (data.isError) {
-                var err: any = new Error(error.message);
-                Object.keys(error).forEach(function(key) {
-                  if (err[key] !== error[key]) {
-                    err[key] = error[key];
-                  }
-                });
-                error = err;
+                throw parseError(error);
+              } else {
+                throw parse(error);
               }
-
-              throw error;
             }
 
             return response;
@@ -710,7 +672,7 @@ class Rabbitr extends EventEmitter {
               var isError = error instanceof Error;
               var errJSON = isError ?
                 stringifyError(error) :
-                JSON.stringify(error);
+                stringify(error);
 
               return {
                 error: errJSON,
