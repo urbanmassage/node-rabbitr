@@ -161,11 +161,11 @@ class Rabbitr extends EventEmitter {
   }
 
   // istanbul ignore next
-  public whenReady(callback?: () => void) {
-    return this.connectionPromise.then(() => void 0).asCallback(callback);
+  public whenReady(callback?: () => void): Bluebird<void> {
+    return this.connectionPromise.then<void>(() => void 0).asCallback(callback);
   }
 
-  private _formatName(name: string) {
+  private _formatName(name: string): string {
     // istanbul ignore next
     if (this.opts.queuePrefix) {
       name = this.opts.queuePrefix + '.' + name;
