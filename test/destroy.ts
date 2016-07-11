@@ -51,7 +51,7 @@ describe('rabbitr#destroy', function() {
     });
   });
 
-  let ifGcIt = global.gc ? it : it.skip;
+  let ifGcIt = global.gc && parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) >= 5 ? it : it.skip;
 
   ifGcIt('doesn\'t leak', function() {
     function runCycle() {
