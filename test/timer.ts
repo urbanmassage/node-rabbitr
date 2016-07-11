@@ -1,5 +1,6 @@
-import {expect} from 'chai';
+import Bluebird = require('bluebird');
 import Rabbitr = require('../');
+import {expect} from 'chai';
 import {v4} from 'node-uuid';
 
 const ACCEPTABLE_TIMER_THRESHOLD = 10;
@@ -9,21 +10,31 @@ describe('rabbitr#setTimer', function() {
     url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
   });
   before((done) => rabbit.whenReady(done));
-  after((done) => rabbit.destroy(done));
+
+  const createdExchanges: string[] = [];
+  const createdQueues: string[] = [];
+
+  after(() =>
+    Bluebird.all([
+      // cleanup
+      ...createdExchanges.map(exchangeName =>
+        Bluebird.fromCallback(cb =>
+          rabbit._cachedChannel.deleteExchange(exchangeName, {}, cb)
+        )
+      ),
+      ...createdQueues.map(queueName =>
+        Bluebird.fromCallback(cb =>
+          rabbit._cachedChannel.deleteQueue(queueName, {}, cb)
+        )
+      ),
+      Bluebird.delay(50),
+    ]).then(() => rabbit.destroy())
+  );
 
   it('should receive a message after a set number of milliseconds', function(done) {
     const DELAY = 50;
 
     const queueName = v4() + '.timer_test';
-
-    after(function(done) {
-      // cleanup
-      rabbit._cachedChannel.deleteExchange(queueName);
-      rabbit._cachedChannel.deleteQueue(queueName);
-
-      // give rabbit time enough to perform cleanup
-      setTimeout(done, 50);
-    });
 
     const start = new Date().getTime();
 
@@ -31,36 +42,34 @@ describe('rabbitr#setTimer', function() {
       testProp: 'timed-example-data-' + queueName
     };
 
-    rabbit.subscribe(queueName);
-    rabbit.bindExchangeToQueue(queueName, queueName, function() {
-      rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY);
-    });
+    rabbit.subscribe(queueName)
+      .then(() => createdQueues.push(queueName))
+      .then(() =>
+        rabbit.bindExchangeToQueue(queueName, queueName)
+          .then(() =>
+            createdExchanges.push(queueName)
+          )
+          .then(() =>
+            rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY)
+          )
+      );
 
     rabbit.on(queueName, function(message) {
-      message.ack();
+      Bluebird.try(() => {
+        message.ack();
 
-      // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
-      const delay = Math.abs(new Date().getTime() - start);
-      expect(delay).to.be.above(DELAY - ACCEPTABLE_TIMER_THRESHOLD);
-      expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
-
-      done();
+        // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
+        const delay = Math.abs(new Date().getTime() - start);
+        expect(delay).to.be.above(DELAY - ACCEPTABLE_TIMER_THRESHOLD);
+        expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
+      }).asCallback(done);
     });
   });
 
-  it('should not receive a message if #clearTimer is called', function(done) {
+  it('should not receive a message if #clearTimer is called', () => {
     const DELAY = 50;
 
     const queueName = v4() + '.clear_timer_test';
-
-    after(function(done) {
-      // cleanup
-      rabbit._cachedChannel.deleteExchange(queueName);
-      rabbit._cachedChannel.deleteQueue(queueName);
-
-      // give rabbit time enough to perform cleanup
-      setTimeout(done, 50);
-    });
 
     const testData = {
       testProp: 'timed-example-data-' + queueName
@@ -68,9 +77,16 @@ describe('rabbitr#setTimer', function() {
 
     let receivedMessages = 0;
 
+    rabbit.subscribe(queueName)
+      .then(() => createdQueues.push(queueName))
+      .then(() =>
+        rabbit.bindExchangeToQueue(queueName, queueName)
+          .then(() =>
+            createdExchanges.push(queueName)
+          )
+      );
+
     // listen for messages on the queue - nothing should be received here if this works!
-    rabbit.subscribe(queueName);
-    rabbit.bindExchangeToQueue(queueName, queueName);
     rabbit.on(queueName, function(message) {
       message.ack();
 
@@ -84,10 +100,9 @@ describe('rabbitr#setTimer', function() {
     }, DELAY / 2);
 
     // also set a timeout to fire after the message should have already have been delivered to check it wasn't
-    setTimeout(function() {
-      expect(receivedMessages).to.equal(0);
-
-      done();
-    }, DELAY);
+    return Bluebird.delay(DELAY)
+      .then(() => {
+        expect(receivedMessages).to.equal(0);
+      });
   });
 });
