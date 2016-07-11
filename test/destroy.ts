@@ -58,15 +58,19 @@ describe('rabbitr#destroy', function() {
       const rabbit = new Rabbitr({
         url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
       });
-      return rabbit.whenReady()
-        .then(() =>
-          rabbit.destroy()
-        )
-        .then(() =>
-          global.gc()
-        )
-        .delay(100)
-        ;
+
+      return new Bluebird((resolve, reject) => {
+        rabbit.whenReady()
+          .then(() =>
+            rabbit.destroy()
+          )
+          .then(() =>
+            global.gc() && void 0
+          )
+          .delay(100)
+          .then(resolve, reject)
+          ;
+      });
     }
 
     /** number of times to run a connection cycle */
