@@ -7,6 +7,7 @@ describe('rabbitr#pubsub', function() {
     url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
   });
   before((done) => rabbit.whenReady(done));
+  after((done) => rabbit.destroy(done));
 
   it('should receive messages on the specified queue', function(done) {
     const exchangeName = v4() + '.pubsub_test';

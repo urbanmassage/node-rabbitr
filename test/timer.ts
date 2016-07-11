@@ -9,6 +9,7 @@ describe('rabbitr#setTimer', function() {
     url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
   });
   before((done) => rabbit.whenReady(done));
+  after((done) => rabbit.destroy(done));
 
   it('should receive a message after a set number of milliseconds', function(done) {
     const DELAY = 50;
