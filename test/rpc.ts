@@ -129,10 +129,10 @@ describe('rabbitr#rpc', function() {
       );
   });
 
-  it('timeouts', () => {
+  it.only('timeouts', () => {
     const queueName = v4() + '.rpc_test';
 
-    rabbit.rpcListener(queueName, message => {
+    return rabbit.rpcListener(queueName, message => {
       // No reply...
     })
       .then(() => createdQueues.push('rpc.' + queueName))
