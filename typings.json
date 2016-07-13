@@ -1,19 +1,19 @@
 {
   "dependencies": {
     "amqplib": "registry:npm/amqplib#0.4.1+20160401203933",
-    "bluebird": "registry:npm/bluebird#3.3.4+20160411163813"
+    "bluebird": "registry:npm/bluebird#3.3.4+20160622205516",
+    "when": "registry:npm/when#2.4.0+20160604153244"
   },
   "devDependencies": {
-    "chai": "registry:npm/chai#3.5.0+20160402210230",
+    "chai": "registry:npm/chai#3.5.0+20160415060238",
     "chalk": "registry:npm/chalk#1.0.0+20160211003958",
+    "node-uuid": "registry:npm/node-uuid#1.4.7+20160503013124",
     "object-assign": "registry:npm/object-assign#4.0.1+20160301180549"
   },
   "globalDependencies": {
-    "node": "registry:env/node#4.0.0+20160507210304"
+    "node": "registry:env/node#0.10.0+20160622202520"
   },
   "globalDevDependencies": {
-    "mocha": "registry:dt/mocha#2.2.5+20160317120654",
-    "shortid": "registry:dt/shortid#0.0.0+20160316155526",
-    "when": "registry:dt/when#2.4.0+20160317120654"
+    "mocha": "registry:env/mocha#2.2.5+20160321223601"
   }
 }
