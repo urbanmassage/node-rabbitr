@@ -1,24 +1,40 @@
+import Bluebird = require('bluebird');
 import Rabbitr = require('../');
 import {expect} from 'chai';
 import {v4} from 'node-uuid';
 
 describe('rabbitr#rpc', function() {
-  const rabbit = new Rabbitr({
-    url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
-  });
+  let rabbit: Rabbitr;
+  before(() =>
+    (
+      rabbit = new Rabbitr({
+        url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+      })
+    ).whenReady()
+  );
 
-  it('should receive messages on rpcListener', function(done) {
-    const queueName = v4() + '.rpc_test';
+  const createdExchanges: string[] = [];
+  const createdQueues: string[] = [];
 
-    after(function(done) {
+  after(() =>
+    Bluebird.all([
       // cleanup
-      rabbit._cachedChannel.deleteExchange('rpc.'+queueName);
-      rabbit._cachedChannel.deleteQueue('rpc.'+queueName);
-      rabbit._cachedChannel.deleteExchange('rpc.'+queueName+'.return');
+      ...createdExchanges.map(exchangeName =>
+        Bluebird.fromCallback(cb =>
+          rabbit._cachedChannel.deleteExchange(exchangeName, {}, cb)
+        )
+      ),
+      ...createdQueues.map(queueName =>
+        Bluebird.fromCallback(cb =>
+          rabbit._cachedChannel.deleteQueue(queueName, {}, cb)
+        )
+      ),
+      Bluebird.delay(50),
+    ]).then(() => rabbit.destroy())
+  );
 
-      // give rabbit time enough to perform cleanup
-      setTimeout(done, 500);
-    });
+  it('should receive messages on rpcListener', () => {
+    const queueName = v4() + '.rpc_test';
 
     const testData = {
       testProp: 'rpc-example-data-' + queueName
@@ -27,103 +43,108 @@ describe('rabbitr#rpc', function() {
       testing: 'return-'+queueName
     };
 
-    rabbit.rpcListener(queueName, function(message, cb) {
+    return rabbit.rpcListener(queueName, message => {
       // here we'll assert that the data is the same
       expect(message.data).to.deep.equal(testData);
 
-      message.queue.shift();
-
-      cb(null, responseData);
-    });
-
-    rabbit.rpcExec(queueName, testData, function(err, data) {
-      // here we'll assert that the data is the same - hitting this point basically means the test has passed anyway :)
-      expect(err).to.not.exist;
-      expect(data).to.deep.equal(responseData);
-
-      done();
-    });
+      return Bluebird.resolve(responseData);
+    })
+      .then(() => createdQueues.push('rpc.' + queueName))
+      .then(() =>
+        rabbit.rpcExec(queueName, testData)
+          .then(data => {
+            // here we'll assert that the data is the same -
+            // hitting this point basically means the test has passed anyway :)
+            expect(data).to.deep.equal(responseData);
+          })
+      );
   });
 
-  it('passes errors back', function(done) {
+  it('passes errors back', () => {
     const queueName = v4() + '.rpc_test';
 
     const error = new Error('Test');
 
-    rabbit.rpcListener(queueName, function(message, cb) {
-      message.queue.shift();
-      cb(error);
-    });
+    return rabbit.rpcListener(queueName, message => {
+      return Bluebird.reject(error);
+    })
+      .then(() => createdQueues.push('rpc.' + queueName))
+      .then(() =>
+        rabbit.rpcExec(queueName, {})
+          .then(
+            () => expect.fail(),
+            err => {
+              expect(err).to.be.an.instanceOf(Error);
+              // bluebird injects some extra props (like __stackCleaned__) so this won't work.
+              // expect(err).to.deep.equal(error);
 
-    rabbit.rpcExec(queueName, {}, function(err, message) {
-      expect(err).to.be.an.instanceOf(Error);
-      // bluebird injects some extra props (like __stackCleaned__) so this won't work.
-      // expect(err).to.deep.equal(error);
+              ['name', 'message'].forEach(function(key) {
+                // because these are not checked in deep-equal
+                expect(err).to.have.property(key).that.is.deep.equal(error[key]);
+              });
 
-      ['name', 'message'].forEach(function(key) {
-        // because these are not checked in deep-equal
-        expect(err).to.have.property(key).that.is.deep.equal(error[key]);
-      });
-
-      expect(err).to.have.property('stack').that.has.string((error as any).stack);
-
-      done();
-    });
+              expect(err).to.have.property('stack').that.has.string((error as any).stack);
+            }
+          )
+      );
   });
 
-  it('passes custom errors', function(done) {
+  it('passes custom errors', () => {
     const queueName = v4() + '.rpc_test';
 
     const error = {a: 'b', c: 'd', name: 'Error', message: 'test'};
 
-    rabbit.rpcListener(queueName, function(message, cb) {
-      message.queue.shift();
-
-      cb(error);
-    });
-
-    rabbit.rpcExec(queueName, {}, function(err, message) {
-      expect(err).to.deep.equal(error);
-
-      expect(err).not.to.be.an.instanceOf(Error);
-
-      done();
-    });
+    return rabbit.rpcListener(queueName, message =>
+      Bluebird.reject(error)
+    )
+      .then(() => createdQueues.push('rpc.' + queueName))
+      .then(() =>
+        rabbit.rpcExec(queueName, {}).then(
+          () => expect.fail(),
+          err => {
+            expect(err).to.deep.equal(error);
+            expect(err).not.to.be.an.instanceOf(Error);
+          }
+        )
+      );
   });
 
-  it('passes Buffers', function(done) {
+  it('passes Buffers', () => {
     const queueName = v4() + '.rpc_test';
 
     const data = 'Hello world!';
 
-    rabbit.rpcListener(queueName, function(message, cb) {
-      message.queue.shift();
+    rabbit.rpcListener(queueName, message => {
       expect(message.data).to.be.an.instanceOf(Buffer);
       expect(message.data.toString()).to.equal(data);
-      cb(null, new Buffer(data));
-    });
-
-    rabbit.rpcExec(queueName, new Buffer(data), function(err, message) {
-      expect(err).to.not.exist;
-
-      expect(message).to.be.an.instanceOf(Buffer);
-      expect(message.toString()).to.equal(data);
-      done();
-    });
+      return Bluebird.resolve(new Buffer(data));
+    })
+      .then(() => createdQueues.push('rpc.' + queueName))
+      .then(() =>
+        rabbit.rpcExec(queueName, new Buffer(data))
+          .then(response => {
+            expect(response).to.be.an.instanceOf(Buffer);
+            expect(response.toString()).to.equal(data);
+          })
+      );
   });
 
-  it('timeouts', function(done) {
+  it.only('timeouts', () => {
     const queueName = v4() + '.rpc_test';
 
-    rabbit.rpcListener(queueName, function(message, cb) {
-      message.queue.shift();
+    return rabbit.rpcListener(queueName, message => {
       // No reply...
-    });
-
-    rabbit.rpcExec(queueName, {}, {timeout: 10}, (err: Error, message?) => {
-      expect(err).to.be.an.instanceOf(Error);
-      expect(err).to.have.property('name').that.equals('TimeoutError');
-      done();
-    });
+    })
+      .then(() => createdQueues.push('rpc.' + queueName))
+      .then(() =>
+        rabbit.rpcExec(queueName, {}, {timeout: 10})
+        .then(
+          () => expect.fail(),
+          err => {
+            expect(err).to.be.an.instanceOf(Error);
+            expect(err).to.have.property('name').that.equals('TimeoutError');
+          }
+        )
+      );
   });
 });
