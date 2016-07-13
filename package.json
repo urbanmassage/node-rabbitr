@@ -6,7 +6,7 @@
   "scripts": {
     "typings": "typings install && typings prune",
     "build": "tsc -p .",
-    "test": "mocha -gc",
+    "test": "DEBUG=rabbit* mocha -gc",
     "coverage": "nyc --reporter=lcov --reporter=text mocha",
     "sendcoverage": "if [ -f coverage/lcov.info ]; then cat ./coverage/lcov.info | ./node_modules/codecov.io/bin/codecov.io.js; fi",
     "preversion": "npm run test -- --bail",

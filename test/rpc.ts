@@ -4,10 +4,14 @@ import {expect} from 'chai';
 import {v4} from 'node-uuid';
 
 describe('rabbitr#rpc', function() {
-  const rabbit = new Rabbitr({
-    url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
-  });
-  before((done) => rabbit.whenReady(done));
+  let rabbit: Rabbitr;
+  before(() =>
+    (
+      rabbit = new Rabbitr({
+        url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+      })
+    ).whenReady()
+  );
 
   const createdExchanges: string[] = [];
   const createdQueues: string[] = [];

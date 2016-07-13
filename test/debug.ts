@@ -15,7 +15,6 @@ describe('debug', function() {
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
-    after(() => rabbit.destroy());
 
     const response = {test: 2};
 
@@ -26,7 +25,8 @@ describe('debug', function() {
     return rabbit.rpcExec(queueName, {test: 1}, {timeout: 100})
       .then(res => {
         expect(res).to.deep.equal(response);
-      });
+      })
+      .finally(() => rabbit.destroy());
   });
 
   it('should skip non-whitelisted rpc', () => {
@@ -37,7 +37,6 @@ describe('debug', function() {
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
-    after(() => rabbit.destroy());
 
     rabbit.rpcListener(queueName, message => {
       throw new Error('Got a message on non-whitelisted queue');
@@ -49,7 +48,8 @@ describe('debug', function() {
       }, err => {
         expect(err).to.be.an.instanceOf(Error);
         expect(err).to.have.property('name').that.equals('TimeoutError');
-      });
+      })
+      .finally(() => rabbit.destroy());
   });
 
   it('should not skip whitelisted pubsub', () => {
@@ -60,7 +60,6 @@ describe('debug', function() {
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
-    after(() => rabbit.destroy());
 
     const data = {test: 15};
 
@@ -76,7 +75,8 @@ describe('debug', function() {
         }),
         rabbit.send(queueName, data),
       ])
-    );
+    )
+    .finally(() => rabbit.destroy());
   });
 
   it('should skip non-whitelisted pubsub', () => {
@@ -87,7 +87,6 @@ describe('debug', function() {
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
-    after(() => rabbit.destroy());
 
     return Bluebird.all([
       rabbit.subscribe(queueName),
@@ -102,6 +101,7 @@ describe('debug', function() {
         ]),
         rabbit.send(queueName, {}),
       ])
-    );
+    )
+    .finally(() => rabbit.destroy());
   });
 });
