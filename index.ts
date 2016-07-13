@@ -469,10 +469,9 @@ class Rabbitr extends EventEmitter {
       }, callback)
     ).disposer(() => {
       log(`deleting temp queue ${cyan(queueName)}`);
-      return Bluebird.fromCallback<void>(callback =>
+      return Bluebird.fromCallback<any>(callback =>
         // delete the return queue and close exc channel
-        channel.deleteQueue(queueName) && 0 || callback(null)
-        // FIXME - callback isn't being called here.
+        channel.deleteQueue(queueName, {}, callback)
       ).catch(error => {
         // istanbul ignore next
         console.log(`rabbitr temp queue '${cyan(queueName)}' cleanup exception`, error && error.stack || error);
