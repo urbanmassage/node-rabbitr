@@ -11,13 +11,11 @@ describe('shutdown', function() {
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
       log: require('debug')('rabbit1'),
     });
-    after(() => rabbit.destroy());
 
     const rabbit2 = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
       log: require('debug')('rabbit2'),
     });
-    after(() => rabbit2.destroy());
 
     return Bluebird.all([
       rabbit.whenReady(),
@@ -36,6 +34,53 @@ describe('shutdown', function() {
           expect(err).to.be.an.instanceOf(Error);
           expect(err).to.have.property('name').that.equals('TimeoutError');
         })
+    )
+    .finally(() =>
+      Bluebird.all([
+        rabbit.destroy(),
+        rabbit2.destroy(),
+      ])
+    );
+  });
+
+  it('should continue handling pending rpc messages after shutdown is triggered', () => {
+    const queueName = v4() + '.rpc_test';
+
+    const DELAY = 100;
+
+    const rabbit = new Rabbitr({
+      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+      log: require('debug')('rabbit1'),
+    });
+
+    const rabbit2 = new Rabbitr({
+      url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+      log: require('debug')('rabbit2'),
+    });
+
+    const expected = {test: 40};
+
+    return Bluebird.all([
+      rabbit.whenReady(),
+      rabbit2.whenReady(),
+    ]).then(() =>
+      rabbit.rpcListener(queueName, message => {
+        return Bluebird.resolve(expected).delay(DELAY);
+      })
+    ).then(() =>
+      Bluebird.all([
+        Bluebird.delay(DELAY/2).then(() => (rabbit as any).shutdown()),
+        rabbit2.rpcExec(queueName, {}, {timeout: DELAY + 20})
+          .then(response => {
+            expect(response).to.deep.equal(expected);
+          }),
+      ])
+    )
+    .finally(() =>
+      Bluebird.all([
+        rabbit.destroy(),
+        rabbit2.destroy(),
+      ])
     );
   });
 });
