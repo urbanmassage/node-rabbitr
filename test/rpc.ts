@@ -129,7 +129,7 @@ describe('rabbitr#rpc', function() {
       );
   });
 
-  it.only('timeouts', () => {
+  it('timeouts', () => {
     const queueName = v4() + '.rpc_test';
 
     return rabbit.rpcListener(queueName, message => {
