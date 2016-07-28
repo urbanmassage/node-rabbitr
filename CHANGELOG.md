@@ -3,6 +3,9 @@
 ## next
 - fixed a bug that caused the return value of `rpcExec` and other methods to always be `undefined` if called before the connection was established.
 - introduced debug mode (via `RABBITR_DEBUG` env variable. check README.md)
+- graceful shutdown: when SIGINT is received rabbitr will stop listening for incoming 
+messages but will continue processing pending messages if any and then disconnect from 
+rabbitmq.
 
 ## 8.3.0
 - use node-uuid instead of shortid

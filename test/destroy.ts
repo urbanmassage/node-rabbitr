@@ -51,23 +51,26 @@ describe('rabbitr#destroy', function() {
     });
   });
 
-  let ifGcIt = global.gc ? it : it.skip;
+  let ifGcIt = global.gc && parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) >= 5 ? it : it.skip;
 
   ifGcIt('doesn\'t leak', function() {
     function runCycle() {
       const rabbit = new Rabbitr({
         url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
       });
-      return rabbit.whenReady(() =>
-        Bluebird
-          .delay(100)
+
+      return new Bluebird((resolve, reject) => {
+        rabbit.whenReady()
           .then(() =>
             rabbit.destroy()
           )
           .then(() =>
-            global.gc()
+            global.gc() && void 0
           )
-      );
+          .delay(100)
+          .then(resolve, reject)
+          ;
+      });
     }
 
     /** number of times to run a connection cycle */
