@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## next
+## 8.4.0
 - fixed a bug that caused the return value of `rpcExec` and other methods to always be `undefined` if called before the connection was established.
 - introduced debug mode (via `RABBITR_DEBUG` env variable. check README.md)
 - graceful shutdown: when SIGINT is received rabbitr will stop listening for incoming 
