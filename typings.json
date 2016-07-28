@@ -1,8 +1,7 @@
 {
   "dependencies": {
-    "amqplib": "registry:npm/amqplib#0.4.1+20160401203933",
-    "bluebird": "registry:npm/bluebird#3.3.4+20160622205516",
-    "when": "registry:npm/when#2.4.0+20160604153244"
+    "amqplib": "registry:npm/amqplib#0.4.1+20160726143451",
+    "bluebird": "registry:npm/bluebird#3.3.4+20160622205516"
   },
   "devDependencies": {
     "chai": "registry:npm/chai#3.5.0+20160415060238",
