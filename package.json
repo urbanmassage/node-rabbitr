@@ -1,6 +1,6 @@
 {
   "name": "rabbitr",
-  "version": "8.3.0",
+  "version": "8.4.0",
   "description": "RabbitMQ made easy for nodejs",
   "main": "index",
   "scripts": {
@@ -25,7 +25,7 @@
   "devDependencies": {
     "chai": "^3.5.0",
     "codecov.io": "^0.1.6",
-    "mocha": "^2.5.3",
+    "mocha": "^3.0.0",
     "nyc": "^7.0.0",
     "source-map-support": "^0.4.1",
     "typescript": "^1.8.10",
