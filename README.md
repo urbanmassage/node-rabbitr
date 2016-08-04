@@ -32,7 +32,7 @@ rabbit.on('email.send.booking.create', function(message) {
 	// send an email
 
 	// you can also return a promise
-  return Promise.resolve();
+	return Promise.resolve();
 });
 
 // elsewhere
@@ -51,7 +51,7 @@ rabbit.on('booking.not-confirmed.timer.set', message => {
 	var timeFromNow = 900000; // 15 mins
 
 	rabbit.setTimer('booking.not-confirmed.timer.fire', message.data.id, {
-    id: message.data.id
+		id: message.data.id,
 	}, timeFromNow);
 });
 
@@ -60,7 +60,7 @@ rabbit.subscribe('booking.not-confirmed.timer.clear');
 rabbit.bindExchangeToQueue('booking.confirm', 'booking.not-confirmed.timer.clear');
 rabbit.on('booking.not-confirmed.timer.clear', message => {
 	rabbit.clearTimer('booking.not-confirmed.timer.fire', message.data.id);
-  return Promise.resolve(); // optional
+	return Promise.resolve(); // optional
 });
 
 // handle the timer firing
@@ -69,7 +69,7 @@ rabbit.bindExchangeToQueue('booking.not-confirmed.timer.fire', 'booking.not-conf
 rabbit.on('booking.not-confirmed.timer.fire', message => {
 	// do something off the back of the timer firing
 	// in this example, message.data.id is the booking id that wasn't confirmed in time
-  return Promise.resolve(); // optional
+	return Promise.resolve(); // optional
 });
 ```
 
@@ -81,11 +81,11 @@ Use Rabbitr's RPC methods if you need to do something and get a response back, a
 ### Define the worker's method
 
 ```js
-rabbit.rpcListener('intelli-travel.directions', message => {
+rabbit.rpcListener('rpc-test', message => {
 	// do something with message.data
 
 	return Promise.resolve({
-    rpc: 'is cool'
+		rpc: 'is cool'
 	});
 });
 ```
@@ -93,12 +93,29 @@ rabbit.rpcListener('intelli-travel.directions', message => {
 ### Calling the worker's RPC
 
 ```js
-rabbit.rpcExec('intelli-travel.directions', { some: 'data' })
-  .then(message => {
-    // do something with message.data
-    // message.data will look like { rpc: 'is cool' }
-  })
-  .catch(err => {
-    // handle errors
-  });
+rabbit.rpcExec('rpc-test', { some: 'data' })
+	.then(message => {
+		// do something with message.data
+		// message.data will look like { rpc: 'is cool' }
+	})
+	.catch(err => {
+		// handle errors
+	});
+```
+
+## Debugging
+
+To debug rabbitr, you can enable logging by setting the environment variable
+`DEBUG` to "rabbitr".
+
+You can also tell rabbitr to only listen on one or few queues using the
+environment variable `RABBITR_DEBUG`. Just set it to a comma-separated list of
+queues names. RPC queues have the prefix `rpc.`.
+
+```bash
+# To enable logging
+DEBUG=rabbitr node .
+
+# To only listen on rpc channels `user.create` and `user.update`
+RABBITR_DEBUG=rpc.user.create,rpc.user.update node .
 ```
