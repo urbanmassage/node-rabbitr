@@ -7,7 +7,9 @@
     "chai": "registry:npm/chai#3.5.0+20160415060238",
     "chalk": "registry:npm/chalk#1.0.0+20160211003958",
     "node-uuid": "registry:npm/node-uuid#1.4.7+20160503013124",
-    "object-assign": "registry:npm/object-assign#4.0.1+20160301180549"
+    "object-assign": "registry:npm/object-assign#4.0.1+20160301180549",
+    "sinon": "registry:npm/sinon#1.16.0+20160723033700",
+    "sinon-chai": "registry:npm/sinon-chai#2.8.0+20160310030142"
   },
   "globalDependencies": {
     "node": "registry:env/node#0.10.0+20160622202520"
