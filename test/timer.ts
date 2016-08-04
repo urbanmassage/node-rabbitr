@@ -58,9 +58,9 @@ describe('rabbitr#setTimer', function() {
           )
       );
 
-    rabbit.on(queueName, function(message) {
+    rabbit.on(queueName, function(message, reply) {
       Bluebird.try(() => {
-        message.ack();
+        reply();
 
         // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
         const delay = Math.abs(new Date().getTime() - start);

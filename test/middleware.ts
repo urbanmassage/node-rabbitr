@@ -156,12 +156,12 @@ describe('rabbitr#middleware', function() {
           )
       );
 
-    rabbit.on(queueName, function(message) {
+    rabbit.on(queueName, function(message, reply) {
       Bluebird
         .try(() => {
           expect(middleware).to.be.calledOnce;
 
-          message.ack();
+          reply();
 
           expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
         })
@@ -169,9 +169,11 @@ describe('rabbitr#middleware', function() {
     });
   });
 
-  it.skip('should receive rejections on pubsub', function(done) {
+  it('should receive rejections on pubsub', function(done) {
     const exchangeName = v4() + '.pubsub_test';
     const queueName = v4() + '.pubsub_test';
+
+    const errorMessage = 'Test error message';
 
     const testData = {
       testProp: 'pubsub-example-data-' + queueName
@@ -184,7 +186,13 @@ describe('rabbitr#middleware', function() {
       expect(message).to.have.property('isRPC').that.equals(false);
 
       expect(next).to.be.a('function');
-      return next();
+      return next()
+        .then(
+          () => expect.fail(),
+          error => {
+            if (error.message !== errorMessage) throw error;
+          }
+        );
     });
 
     rabbit.middleware(middleware)
@@ -201,15 +209,14 @@ describe('rabbitr#middleware', function() {
           )
       );
 
-    rabbit.on(queueName, function(message) {
+    rabbit.on(queueName, function(message, reply) {
       Bluebird
         .try(() => {
           expect(middleware).to.be.calledOnce;
 
           expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
 
-          // TODO - this should return a promise
-          message.reject();
+          reply(new Error(errorMessage));
         })
         .asCallback(done);
     });

@@ -52,10 +52,10 @@ describe('rabbitr#pubsub', function() {
           )
       );
 
-    rabbit.on(queueName, function(message) {
+    rabbit.on(queueName, function(message, reply) {
       Bluebird
         .try(() => {
-          message.ack();
+          reply();
 
           // here we'll assert that the data is the same- the fact we received it means the test has basically passed anyway
           expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
@@ -82,10 +82,10 @@ describe('rabbitr#pubsub', function() {
           )
       );
 
-    rabbit.on(queueName, function(message) {
+    rabbit.on(queueName, function(message, reply) {
       Bluebird
         .try(() => {
-          message.ack();
+          reply();
 
           expect(message.data).to.be.an.instanceOf(Buffer);
           expect(message.data.toString()).to.equal(data);

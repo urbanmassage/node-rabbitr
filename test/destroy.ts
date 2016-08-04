@@ -23,7 +23,7 @@ describe('rabbitr#destroy', function() {
     rabbit.whenReady(() => {
       rabbit.subscribe(queueName);
       rabbit.bindExchangeToQueue(exchangeName, queueName);
-      rabbit.on(exchangeName, ({ack}) => ack());
+      rabbit.on(exchangeName, () => Bluebird.resolve());
 
       setTimeout(function() {
         rabbit.destroy((err) => {
@@ -40,7 +40,7 @@ describe('rabbitr#destroy', function() {
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
     rabbit.whenReady(() => {
-      rabbit.rpcListener(channelName, ({ack}) => ack());
+      rabbit.rpcListener(channelName, () => Bluebird.resolve());
       rabbit.rpcExec(channelName, {}, () => void 0);
 
       setTimeout(function() {

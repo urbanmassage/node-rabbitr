@@ -10,7 +10,11 @@ import {stringify, stringifyError, parse, parseError} from './lib/serialization'
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
-function maybeFromCallback<T>(fn: ((done: Rabbitr.Callback<T>) => void) | (() => PromiseLike<T>)): Bluebird<T> {
+function maybeFromCallback<T>(
+  fn:
+    ((done: Rabbitr.Callback<T>) => void) |
+    (() => PromiseLike<T>)
+): Bluebird<T> {
   let callback: Rabbitr.Callback<T>;
   let promise = Bluebird.fromCallback<T>(_callback => (callback = _callback) && void 0);
 
@@ -46,13 +50,13 @@ let HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = false;
 
 class Rabbitr {
   private eventListeners: {
-    [eventName: string]: (message: Rabbitr.IMessage<any>) => void;
+    [eventName: string]: Rabbitr.IEventListener<any>;
   } = {};
 
-  on<Data>(eventName: string, listener: (message: Rabbitr.IMessage<Data>) => void): void;
-  on(eventName: string, listener: (message: Rabbitr.IMessage<any>) => void): void;
+  on<Data>(eventName: string, listener: Rabbitr.IEventListener<Data>): void;
+  on(eventName: string, listener: Rabbitr.IEventListener<any>): void;
 
-  on(eventName: string, listener: (message: Rabbitr.IMessage<any>) => void): void {
+  on(eventName: string, listener: Rabbitr.IEventListener<any>): void {
     if (this.eventListeners[eventName]) {
       throw new Error(`Adding multiple listeners to the same event is not supported.`);
     }
@@ -75,7 +79,7 @@ class Rabbitr {
     if (!this.eventListeners[eventName]) {
       throw new Error(`Triggering an event without a listener: ${eventName}`);
     }
-    this.eventListeners[eventName](message);
+    return maybeFromCallback<void>(this.eventListeners[eventName].bind(null, message));
   }
 
   private removeAllListeners(): void {
@@ -348,27 +352,23 @@ class Rabbitr {
 
           this.log(`got a new message on ${cyan(topic)}`, data);
 
-          const messageAcknowledgement = new Bluebird((ack: () => void, reject) => {
+          const messageAcknowledgement = Bluebird.try(() => {
             const message: Rabbitr.IMessage<TMessage> = {
               send: this.send.bind(this),
               rpcExec: this.rpcExec.bind(this),
               topic,
               data,
               channel,
-              ack,
-              reject,
               isRPC: false,
             };
 
             if (options && options.skipMiddleware) {
-              this.trigger(topic, message);
-              return null;
+              return this.trigger(topic, message);
             }
 
-            this.useMiddleware(message, () => {
-              this.trigger(topic, message);
-              return null;
-            });
+            return this.useMiddleware(message, () =>
+              this.trigger(topic, message)
+            );
           }).then(
             // acknowledged
             () => {
@@ -651,14 +651,13 @@ class Rabbitr {
 
     this.log(`has rpcListener for ${topic}`);
 
-    this.on(rpcQueue, (envelope: Rabbitr.IEnvelopedMessage<TInput>) => {
+    this.on(rpcQueue, (envelope: Rabbitr.IEnvelopedMessage<TInput>): Bluebird<void> => {
       const dataEnvelope = envelope.data;
 
       // discard expired messages
       const now = new Date().getTime();
       if (now > dataEnvelope.expiration) {
-        envelope.ack();
-        return;
+        return Bluebird.resolve();
       }
 
       const message: Rabbitr.IMessage<TInput> = <Rabbitr.IEnvelopedMessage<TInput> & Rabbitr.IMessage<TInput>>envelope;
@@ -666,7 +665,7 @@ class Rabbitr {
 
       message.isRPC = true;
 
-      this.useMiddleware(message, executor.bind(null, message))
+      return this.useMiddleware(message, executor.bind(null, message))
         .catch(
           // TODO - investigate why bluebird wraps the error here
           //   with an object
@@ -691,9 +690,6 @@ class Rabbitr {
           }
         )
         .then(data => { // send the response
-          // ack here - this will get ignored if the executor has acked or nacked already anyway
-          message.ack();
-
           this._publishChannel.sendToQueue(
             // doesn't need wrapping in this.formatName as the rpcExec function
             //   already formats the return queue name as required
@@ -703,7 +699,9 @@ class Rabbitr {
               contentType: 'application/json',
             }
           );
-        }); // TODO - log uncaught errors at this stage? bluebird will do it anyway.
+        });
+        // TODO - log uncaught errors at this stage?
+        //   bluebird will do it anyway.
     });
 
     return this.subscribe(rpcQueue,
@@ -759,6 +757,10 @@ declare module Rabbitr {
     (err: Error, data: T): void;
   }
 
+  export type IEventListener<TData> =
+    ((message: IMessage<TData>) => PromiseLike<void>) |
+    ((message: IMessage<TData>, respond: ErrorCallback) => void);
+
   export interface IRpcExecOptions {
     timeout?: number;
   }
@@ -779,9 +781,6 @@ declare module Rabbitr {
   }
 
   export interface IMessage<TData> {
-    ack(): void;
-    reject(error?: Error): void;
-
     topic: string;
     channel: amqplib.Channel;
     data: TData;
