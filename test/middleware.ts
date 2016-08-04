@@ -50,6 +50,7 @@ describe('rabbitr#middleware', function() {
     const middleware = sinon.spy((message, next) => {
       expect(message).to.be.an('object');
       expect(message.data).to.deep.equal(testData);
+      expect(message).to.have.property('isRPC').that.equals(true);
 
       expect(next).to.be.a('function');
       return next()
@@ -92,6 +93,7 @@ describe('rabbitr#middleware', function() {
     const middleware = sinon.spy((message, next) => {
       expect(message).to.be.an('object');
       expect(message.data).to.deep.equal(testData);
+      expect(message).to.have.property('isRPC').that.equals(true);
 
       expect(next).to.be.a('function');
       return next()
@@ -120,5 +122,96 @@ describe('rabbitr#middleware', function() {
             expect(middleware).to.be.calledOnce;
           })
       );
+  });
+
+  it('should receive messages on pubsub', function(done) {
+    const exchangeName = v4() + '.pubsub_test';
+    const queueName = v4() + '.pubsub_test';
+
+    const testData = {
+      testProp: 'pubsub-example-data-' + queueName
+    };
+
+    const middleware = sinon.spy((message, next) => {
+      expect(message).to.be.an('object');
+      expect(message.data).to.deep.equal(testData);
+
+      expect(message).to.have.property('isRPC').that.equals(false);
+
+      expect(next).to.be.a('function');
+      return next();
+    });
+
+    rabbit.middleware(middleware)
+
+    rabbit.subscribe(queueName)
+      .then(() => createdQueues.push(queueName))
+      .then(() =>
+        rabbit.bindExchangeToQueue(exchangeName, queueName)
+          .then(() =>
+            createdExchanges.push(exchangeName)
+          )
+          .then(() =>
+            rabbit.send(exchangeName, testData)
+          )
+      );
+
+    rabbit.on(queueName, function(message) {
+      Bluebird
+        .try(() => {
+          expect(middleware).to.be.calledOnce;
+
+          message.ack();
+
+          expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
+        })
+        .asCallback(done);
+    });
+  });
+
+  it.skip('should receive rejections on pubsub', function(done) {
+    const exchangeName = v4() + '.pubsub_test';
+    const queueName = v4() + '.pubsub_test';
+
+    const testData = {
+      testProp: 'pubsub-example-data-' + queueName
+    };
+
+    const middleware = sinon.spy((message, next) => {
+      expect(message).to.be.an('object');
+      expect(message.data).to.deep.equal(testData);
+
+      expect(message).to.have.property('isRPC').that.equals(false);
+
+      expect(next).to.be.a('function');
+      return next();
+    });
+
+    rabbit.middleware(middleware)
+
+    rabbit.subscribe(queueName)
+      .then(() => createdQueues.push(queueName))
+      .then(() =>
+        rabbit.bindExchangeToQueue(exchangeName, queueName)
+          .then(() =>
+            createdExchanges.push(exchangeName)
+          )
+          .then(() =>
+            rabbit.send(exchangeName, testData)
+          )
+      );
+
+    rabbit.on(queueName, function(message) {
+      Bluebird
+        .try(() => {
+          expect(middleware).to.be.calledOnce;
+
+          expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
+
+          // TODO - this should return a promise
+          message.reject();
+        })
+        .asCallback(done);
+    });
   });
 });
