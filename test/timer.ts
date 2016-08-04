@@ -91,8 +91,8 @@ describe('rabbitr#setTimer', function() {
       );
 
     // listen for messages on the queue - nothing should be received here if this works!
-    rabbit.on(queueName, function(message) {
-      message.ack();
+    rabbit.on(queueName, function(message, done) {
+      done();
 
       receivedMessages++;
     });
