@@ -5,11 +5,11 @@ const rabbit = new Rabbitr({
 
 rabbit.subscribe('example.timer');
 rabbit.bindExchangeToQueue('example.timer', 'example.timer');
-rabbit.on('example.timer', function(message) {
+rabbit.on('example.timer', function(message, done) {
   console.log('Got delayed message', message);
   console.log('Delayed message data is', message.data);
 
-  message.ack();
+  done();
 
   setTimeout(function() {
     process.exit(0);

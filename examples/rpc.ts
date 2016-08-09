@@ -9,8 +9,6 @@ rabbit.rpcListener('example.rpc', function(message, cb) {
   console.log('Got message', message);
   console.log('Message data is', message.data);
 
-  message.ack();
-
   cb(null, {
     thisIs: 'the-response'
   })
