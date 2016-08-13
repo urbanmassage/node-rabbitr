@@ -6,7 +6,6 @@ node_js:
 services:
 - rabbitmq
 script:
-- npm run typings
 - npm run build -- --declaration
 - npm test
 after_success:

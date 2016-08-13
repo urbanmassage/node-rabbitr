@@ -4,7 +4,7 @@
   "description": "RabbitMQ made easy for nodejs",
   "main": "index",
   "scripts": {
-    "typings": "typings install && typings prune",
+    "prepublish": "typings install && typings prune",
     "build": "tsc -p .",
     "test": "DEBUG=rabbit* mocha -gc",
     "coverage": "nyc --reporter=lcov --reporter=text mocha",
