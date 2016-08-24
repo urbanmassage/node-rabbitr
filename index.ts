@@ -127,8 +127,8 @@ class Rabbitr {
       defaultRPCExpiry: DEFAULT_RPC_EXPIRY,
     }, opts);
     this.opts.connectionOpts = objectAssign({
-      heartbeat: 1
-    }, opts && opts.connectionOpts || {});
+      heartbeat: 1,
+    }, opts && opts.connectionOpts);
 
     // istanbul ignore next
     if (!this.opts.url) {
@@ -293,12 +293,17 @@ class Rabbitr {
     return Bluebird.fromCallback(callback =>
       this._publishChannel.assertExchange(this._formatName(topic), 'topic', {}, callback)
     ).then(() => {
-      this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
-        contentType: 'application/json',
-      });
+      this._publishChannel.publish(
+        this._formatName(topic),
+        '*',
+        new Buffer(stringify(data)),
+        {
+          contentType: 'application/json',
+          headers: opts && opts.headers,
+        }
+      );
     }).asCallback(cb);
   }
-
 
   subscribe(topic: string, cb?: Rabbitr.Callback<any>): Bluebird<void>;
   subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): Bluebird<void>;
@@ -364,7 +369,7 @@ class Rabbitr {
               data,
               channel,
               isRPC: false,
-              headers: msg.properties,
+              headers: msg.properties.headers,
             };
 
             if (options && options.skipMiddleware) {
@@ -448,7 +453,13 @@ class Rabbitr {
     return `dlq.${topic}.${uniqueID}`;
   }
 
-  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
+  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback): Bluebird<void>;
+  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, opts?: Rabbitr.ISetTimerOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void>;
+  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, opts?, cb?): Bluebird<void> {
+    if (typeof opts === 'function') {
+      cb = opts;
+      opts = null;
+    }
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
@@ -473,8 +484,8 @@ class Rabbitr {
     ).then(() => {
       this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
         contentType: 'application/json',
-        // TODO - should we do anything with this?
         expiration: `${ttl}`,
+        headers: opts && opts.headers,
       });
     }).asCallback(cb);
   }
@@ -594,6 +605,7 @@ class Rabbitr {
           {
             contentType: 'application/json',
             expiration: `${timeoutMS}`,
+            headers: opts && opts.headers,
           }
         );
 
@@ -703,9 +715,10 @@ class Rabbitr {
             //   already formats the return queue name as required
             envelope.data.returnQueue,
             new Buffer(stringify(data)),
-            objectAssign({}, message.responseHeaders, {
+            {
               contentType: 'application/json',
-            })
+              headers: message.responseHeaders,
+            }
           );
         });
         // TODO - log uncaught errors at this stage?
@@ -771,6 +784,7 @@ declare module Rabbitr {
 
   export interface IRpcExecOptions {
     timeout?: number;
+    headers?: { [header: string]: string; };
   }
   export interface IRpcListenerOptions<TInput, TOutput> {
     middleware?: Function[];
@@ -786,15 +800,17 @@ declare module Rabbitr {
     durable?: boolean;
   }
   export interface ISendOptions {
+    headers?: { [header: string]: string; };
+  }
+  export interface ISetTimerOptions {
+    headers?: { [header: string]: string; };
   }
 
   export interface IMessage<TData> {
     topic: string;
     channel: amqplib.Channel;
     data: TData;
-    headers: {
-      [header: string]: string;
-    };
+    headers: { [header: string]: string; };
 
     isRPC: boolean;
     /** only for rpc: message headers to be sent back with the response */
