@@ -277,9 +277,20 @@ class Rabbitr {
   // standard pub/sub stuff
 
   send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+  send(topic: string, data: any, opts?: Rabbitr.ISendOptions): Bluebird<void>;
   send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+  send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Bluebird<void>;
 
   send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void> {
+    if (typeof opts === 'function') {
+      let tmp = cb;
+      cb = opts as any;
+      opts = tmp as any;
+    } else if (typeof cb !== 'function') {
+      opts = cb as any;
+      cb = null;
+    }
+
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
@@ -365,6 +376,9 @@ class Rabbitr {
 
           const messageAcknowledgement = Bluebird.try(() => {
             const message: Rabbitr.IMessage<TMessage> = {
+              send: this.send.bind(this),
+              rpcExec: this.rpcExec.bind(this),
+
               topic,
               data,
               channel,
@@ -812,6 +826,16 @@ declare module Rabbitr {
     data: TData;
     headers: { [header: string]: string; };
 
+    send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+    send(topic: string, data: any, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+    send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+    send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+
+    rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Bluebird<any>;
+    rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): Bluebird<any>;
+    rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
+    rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
+
     isRPC: boolean;
     /** only for rpc: message headers to be sent back with the response */
     responseHeaders?: {
@@ -819,8 +843,11 @@ declare module Rabbitr {
     };
   }
 
+  export interface MiddlewareCallback {
+    (): Bluebird<any | void>;
+  }
   export interface Middleware {
-    (fn: (message: IMessage<any>, next: () => Bluebird<any | void>) => PromiseLike<any | void>): void;
+    (fn: (message: IMessage<any>, next: MiddlewareCallback) => PromiseLike<any | void>): void;
   }
 }
 
