@@ -46,6 +46,12 @@ class TimeoutError extends Error {
   }
 }
 
+interface RPCRequestEnvelope<TData> {
+  d: TData;
+  expiration: number;
+  returnQueue: string;
+}
+
 let HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = false;
 
 class Rabbitr {
@@ -159,7 +165,7 @@ class Rabbitr {
     if (this.isShuttingDown) {
       if (this.pendingMessagesCount) {
         // wait
-        this.log(`we have ${yellow(this.pendingMessagesCount + '')} pending messsges`);
+        this.log(`we have ${yellow(`${this.pendingMessagesCount}`)} pending messsges`);
       } else {
         return this.destroy();
       }
@@ -227,7 +233,7 @@ class Rabbitr {
   private _formatName(name: string): string {
     // istanbul ignore next
     if (this.opts.queuePrefix) {
-      return this.opts.queuePrefix + '.' + name;
+      return `${this.opts.queuePrefix}.${name}`;
     }
 
     return name;
@@ -354,12 +360,11 @@ class Rabbitr {
 
           const messageAcknowledgement = Bluebird.try(() => {
             const message: Rabbitr.IMessage<TMessage> = {
-              send: this.send.bind(this),
-              rpcExec: this.rpcExec.bind(this),
               topic,
               data,
               channel,
               isRPC: false,
+              headers: msg.properties,
             };
 
             if (options && options.skipMiddleware) {
@@ -544,7 +549,7 @@ class Rabbitr {
     // this will send the data down the topic and then open up a unique return queue
     const rpcQueue = this._rpcQueueName(topic);
 
-    const unique = v4() + '_' + ((Math.round(new Date().getTime() / 1000) + '').substr(5));
+    const unique = `${v4()}_${((`${Math.round(new Date().getTime() / 1000)}`).substr(5))}`;
     const returnQueueName = `${rpcQueue}.return.${unique}`;
 
     const now = new Date().getTime();
@@ -576,17 +581,21 @@ class Rabbitr {
         channel.consume(replyQueue, gotReply, {noAck: true}, callback)
       ).then<TOutput>(() => {
         // send the request now
-        const request = {
+        const request: RPCRequestEnvelope<TInput> = {
           d: data,
           returnQueue: this._formatName(returnQueueName),
           expiration: now + timeoutMS,
         };
 
         this.log('sending rpc request');
-        this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(request)), {
-          contentType: 'application/json',
-          expiration: `${timeoutMS}`,
-        });
+        this._publishChannel.sendToQueue(
+          this._formatName(rpcQueue),
+          new Buffer(stringify(request)),
+          {
+            contentType: 'application/json',
+            expiration: `${timeoutMS}`,
+          }
+        );
 
         return Bluebird.race<amqplib.Message>([
           // set a timeout
@@ -651,19 +660,18 @@ class Rabbitr {
 
     this.log(`has rpcListener for ${topic}`);
 
-    this.on(rpcQueue, (envelope: Rabbitr.IEnvelopedMessage<TInput>): Bluebird<void> => {
-      const dataEnvelope = envelope.data;
-
+    this.on(rpcQueue, (envelope: Rabbitr.IMessage<RPCRequestEnvelope<TInput>>): Bluebird<void> => {
       // discard expired messages
       const now = new Date().getTime();
-      if (now > dataEnvelope.expiration) {
+      if (now > envelope.data.expiration) {
         return Bluebird.resolve();
       }
 
-      const message: Rabbitr.IMessage<TInput> = <Rabbitr.IEnvelopedMessage<TInput> & Rabbitr.IMessage<TInput>>envelope;
-      message.data = dataEnvelope.d;
-
-      message.isRPC = true;
+      const message: Rabbitr.IMessage<TInput> = objectAssign(envelope, {
+        data: envelope.data.d,
+        isRPC: true,
+        responseHeaders: {},
+      });
 
       return this.useMiddleware(message, executor.bind(null, message))
         .catch(
@@ -693,11 +701,11 @@ class Rabbitr {
           this._publishChannel.sendToQueue(
             // doesn't need wrapping in this.formatName as the rpcExec function
             //   already formats the return queue name as required
-            dataEnvelope.returnQueue,
+            envelope.data.returnQueue,
             new Buffer(stringify(data)),
-            {
+            objectAssign({}, message.responseHeaders, {
               contentType: 'application/json',
-            }
+            })
           );
         });
         // TODO - log uncaught errors at this stage?
@@ -784,23 +792,14 @@ declare module Rabbitr {
     topic: string;
     channel: amqplib.Channel;
     data: TData;
-
-    send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
-    send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
-
-    rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Bluebird<any>;
-    rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): Bluebird<any>;
-    rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
-    rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
+    headers: {
+      [header: string]: string;
+    };
 
     isRPC: boolean;
-  }
-
-  export interface IEnvelopedMessage<TData> extends IMessage<any> {
-    data: {
-      d: TData,
-      expiration: number,
-      returnQueue: string,
+    /** only for rpc: message headers to be sent back with the response */
+    responseHeaders?: {
+      [header: string]: string;
     };
   }
 
