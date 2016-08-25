@@ -647,6 +647,8 @@ class Rabbitr {
               }
             }
 
+            // FIXME - find a way to return msg.properties.headers as well
+
             return response;
           },
           // TODO - investigate why bluebird wraps the error here
