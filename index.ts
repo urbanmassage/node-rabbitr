@@ -686,15 +686,17 @@ class Rabbitr {
 
     this.log(`has rpcListener for ${topic}`);
 
-    this.on(rpcQueue, (envelope: Rabbitr.IMessage<RPCRequestEnvelope<TInput>>): Bluebird<void> => {
+    this.on(rpcQueue, (envelopedMessage: Rabbitr.IMessage<RPCRequestEnvelope<TInput>>): Bluebird<void> => {
+      const envelope = envelopedMessage.data;
+
       // discard expired messages
       const now = new Date().getTime();
-      if (now > envelope.data.expiration) {
+      if (now > envelope.expiration) {
         return Bluebird.resolve();
       }
 
-      const message: Rabbitr.IMessage<TInput> = objectAssign(envelope, {
-        data: envelope.data.d,
+      const message: Rabbitr.IMessage<TInput> = objectAssign({}, envelopedMessage, {
+        data: envelope.d,
         isRPC: true,
         responseHeaders: {},
       });
@@ -727,7 +729,7 @@ class Rabbitr {
           this._publishChannel.sendToQueue(
             // doesn't need wrapping in this.formatName as the rpcExec function
             //   already formats the return queue name as required
-            envelope.data.returnQueue,
+            envelope.returnQueue,
             new Buffer(stringify(data)),
             {
               contentType: 'application/json',
