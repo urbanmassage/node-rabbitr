@@ -800,9 +800,11 @@ declare module Rabbitr {
     ((message: IMessage<TData>) => PromiseLike<void>) |
     ((message: IMessage<TData>, respond: ErrorCallback) => void);
 
+  export interface Headers { [header: string]: string; }
+
   export interface IRpcExecOptions {
     timeout?: number;
-    headers?: { [header: string]: string; };
+    headers?: any; // Headers;
   }
   export interface IRpcListenerOptions<TInput, TOutput> {
     middleware?: Function[];
@@ -818,10 +820,10 @@ declare module Rabbitr {
     durable?: boolean;
   }
   export interface ISendOptions {
-    headers?: { [header: string]: string; };
+    headers?: any; // Headers;
   }
   export interface ISetTimerOptions {
-    headers?: { [header: string]: string; };
+    headers?: any; // Headers;
   }
 
   export interface IMessage<TData> {
