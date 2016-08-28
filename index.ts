@@ -275,12 +275,15 @@ class Rabbitr {
 
   // standard pub/sub stuff
 
+  // @deprecated signature
   send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
   send(topic: string, data: any, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+  // @deprecated signature
   send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
   send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Bluebird<void>;
 
   send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void> {
+    // istanbul ignore next
     if (typeof opts === 'function') {
       let tmp = cb;
       cb = opts as any;

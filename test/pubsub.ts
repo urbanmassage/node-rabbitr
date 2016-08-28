@@ -33,11 +33,11 @@ describe('rabbitr#pubsub', function() {
   );
 
   it('should receive messages on the specified queue', function(done) {
-    const exchangeName = v4() + '.pubsub_test';
-    const queueName = v4() + '.pubsub_test';
+    const exchangeName = `${v4()}.pubsub_test`;
+    const queueName = `${v4()}.pubsub_test`;
 
     const testData = {
-      testProp: 'pubsub-example-data-' + queueName
+      testProp: `pubsub-example-data-${queueName}`
     };
 
     rabbit.subscribe(queueName, {})
@@ -65,11 +65,11 @@ describe('rabbitr#pubsub', function() {
   });
 
   it('should receive messages on the specified queue (shifted arguments)', function(done) {
-    const exchangeName = v4() + '.pubsub_test';
-    const queueName = v4() + '.pubsub_test';
+    const exchangeName = `${v4()}.pubsub_test`;
+    const queueName = `${v4()}.pubsub_test`;
 
     const testData = {
-      testProp: 'pubsub-example-data-' + queueName
+      testProp: `pubsub-example-data-${queueName}`,
     };
 
     Bluebird.fromCallback(cb => rabbit.subscribe(queueName, cb))
@@ -97,8 +97,8 @@ describe('rabbitr#pubsub', function() {
   });
 
   it('passes Buffers', function(done) {
-    const exchangeName = v4() + '.pubsub_buf_test';
-    const queueName = v4() + '.pubsub_buf_test';
+    const exchangeName = `${v4()}.pubsub_buf_test`;
+    const queueName = `${v4()}.pubsub_buf_test`;
 
     const data = 'Hello world!';
 
