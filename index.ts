@@ -231,7 +231,6 @@ class Rabbitr {
   }
 
   private _formatName(name: string): string {
-    // istanbul ignore next
     if (this.opts.queuePrefix) {
       return `${this.opts.queuePrefix}.${name}`;
     }
@@ -282,7 +281,6 @@ class Rabbitr {
   send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Bluebird<void>;
 
   send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void> {
-    // istanbul ignore next
     if (typeof opts === 'function') {
       let tmp = cb;
       cb = opts as any;
@@ -323,9 +321,8 @@ class Rabbitr {
   subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
 
   subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
-    // istanbul ignore next
     if (typeof opts === 'function') {
-      cb = <any>opts;
+      cb = opts as any;
       opts = null;
     }
 
@@ -470,11 +467,12 @@ class Rabbitr {
 
   setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback): Bluebird<void>;
   setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, opts?: Rabbitr.ISetTimerOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void>;
-  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, opts?, cb?): Bluebird<void> {
+  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, opts?: Rabbitr.ISetTimerOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     if (typeof opts === 'function') {
-      cb = opts;
+      cb = opts as any;
       opts = null;
     }
+
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
@@ -557,19 +555,18 @@ class Rabbitr {
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
 
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
+    if (typeof opts === 'function') {
+      // shift arguments
+      cb = opts as any;
+      opts = null;
+    }
+
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady().then(() =>
         this.rpcExec<TInput, TOutput>(topic, data, opts, cb)
       );
-    }
-
-    // istanbul ignore next
-    if ('function' === typeof opts) {
-      // shift arguments
-      cb = <Rabbitr.Callback<TOutput>>opts;
-      opts = null;
     }
 
     // this will send the data down the topic and then open up a unique return queue

@@ -40,7 +40,7 @@ describe('rabbitr#pubsub', function() {
       testProp: 'pubsub-example-data-' + queueName
     };
 
-    rabbit.subscribe(queueName)
+    rabbit.subscribe(queueName, {})
       .then(() => createdQueues.push(queueName))
       .then(() =>
         rabbit.bindExchangeToQueue(exchangeName, queueName)
@@ -48,7 +48,39 @@ describe('rabbitr#pubsub', function() {
             createdExchanges.push(exchangeName)
           )
           .then(() =>
-            rabbit.send(exchangeName, testData)
+            rabbit.send(exchangeName, testData, {})
+          )
+      );
+
+    rabbit.on(queueName, function(message, reply) {
+      Bluebird
+        .try(() => {
+          reply();
+
+          // here we'll assert that the data is the same- the fact we received it means the test has basically passed anyway
+          expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
+        })
+        .asCallback(done);
+    });
+  });
+
+  it('should receive messages on the specified queue (shifted arguments)', function(done) {
+    const exchangeName = v4() + '.pubsub_test';
+    const queueName = v4() + '.pubsub_test';
+
+    const testData = {
+      testProp: 'pubsub-example-data-' + queueName
+    };
+
+    Bluebird.fromCallback(cb => rabbit.subscribe(queueName, cb))
+      .then(() => createdQueues.push(queueName))
+      .then(() =>
+        rabbit.bindExchangeToQueue(exchangeName, queueName)
+          .then(() =>
+            createdExchanges.push(exchangeName)
+          )
+          .then(() =>
+            Bluebird.fromCallback(cb => rabbit.send(exchangeName, testData, cb))
           )
       );
 
