@@ -5,7 +5,8 @@
   `error` events anymore. Everything else should keep working as expected.
 - [BREAKING] If you subscribe to a topic twice an error will be thrown.
 - [BREAKING] `ack` and `reject` on `IMessage` were removed. Either return a promise or use callbacks in `Rabbitr#on` (now second argument).
-- [BREAKING] middleware has been re-done from scratch. Check readme on how to use it. 
+- [BREAKING] middleware has been re-done from scratch. Check readme on how to use it.
+- Add support for sending an receiving headers
 
 ## 8.4.0
 - fixed a bug that caused the return value of `rpcExec` and other methods to always be `undefined` if called before the connection was established.

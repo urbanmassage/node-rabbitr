@@ -51,7 +51,34 @@ describe('rabbitr#rpc', function() {
     })
       .then(() => createdQueues.push('rpc.' + queueName))
       .then(() =>
-        rabbit.rpcExec(queueName, testData)
+        rabbit.rpcExec(queueName, testData, {})
+          .then(data => {
+            // here we'll assert that the data is the same -
+            // hitting this point basically means the test has passed anyway :)
+            expect(data).to.deep.equal(responseData);
+          })
+      );
+  });
+
+  it('should receive messages on rpcListener (shifted arguments)', () => {
+    const queueName = v4() + '.rpc_test';
+
+    const testData = {
+      testProp: 'rpc-example-data-' + queueName
+    };
+    const responseData = {
+      testing: 'return-'+queueName
+    };
+
+    return rabbit.rpcListener(queueName, message => {
+      // here we'll assert that the data is the same
+      expect(message.data).to.deep.equal(testData);
+
+      return Bluebird.resolve(responseData);
+    })
+      .then(() => createdQueues.push('rpc.' + queueName))
+      .then(() =>
+        Bluebird.fromCallback(cb => rabbit.rpcExec(queueName, testData, cb))
           .then(data => {
             // here we'll assert that the data is the same -
             // hitting this point basically means the test has passed anyway :)

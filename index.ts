@@ -231,7 +231,6 @@ class Rabbitr {
   }
 
   private _formatName(name: string): string {
-    // istanbul ignore next
     if (this.opts.queuePrefix) {
       return `${this.opts.queuePrefix}.${name}`;
     }
@@ -286,7 +285,7 @@ class Rabbitr {
       let tmp = cb;
       cb = opts as any;
       opts = tmp as any;
-    } else if (typeof cb !== 'function') {
+    } else if (cb && typeof cb !== 'function') {
       opts = cb as any;
       cb = null;
     }
@@ -322,9 +321,8 @@ class Rabbitr {
   subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
 
   subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
-    // istanbul ignore next
     if (typeof opts === 'function') {
-      cb = <any>opts;
+      cb = opts as any;
       opts = null;
     }
 
@@ -469,11 +467,12 @@ class Rabbitr {
 
   setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback): Bluebird<void>;
   setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, opts?: Rabbitr.ISetTimerOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void>;
-  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, opts?, cb?): Bluebird<void> {
+  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, opts?: Rabbitr.ISetTimerOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
     if (typeof opts === 'function') {
-      cb = opts;
+      cb = opts as any;
       opts = null;
     }
+
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
@@ -556,19 +555,18 @@ class Rabbitr {
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
 
   rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
+    if (typeof opts === 'function') {
+      // shift arguments
+      cb = opts as any;
+      opts = null;
+    }
+
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady().then(() =>
         this.rpcExec<TInput, TOutput>(topic, data, opts, cb)
       );
-    }
-
-    // istanbul ignore next
-    if ('function' === typeof opts) {
-      // shift arguments
-      cb = <Rabbitr.Callback<TOutput>>opts;
-      opts = null;
     }
 
     // this will send the data down the topic and then open up a unique return queue
@@ -647,6 +645,8 @@ class Rabbitr {
               }
             }
 
+            // FIXME - find a way to return msg.properties.headers as well
+
             return response;
           },
           // TODO - investigate why bluebird wraps the error here
@@ -686,15 +686,17 @@ class Rabbitr {
 
     this.log(`has rpcListener for ${topic}`);
 
-    this.on(rpcQueue, (envelope: Rabbitr.IMessage<RPCRequestEnvelope<TInput>>): Bluebird<void> => {
+    this.on(rpcQueue, (envelopedMessage: Rabbitr.IMessage<RPCRequestEnvelope<TInput>>): Bluebird<void> => {
+      const envelope = envelopedMessage.data;
+
       // discard expired messages
       const now = new Date().getTime();
-      if (now > envelope.data.expiration) {
+      if (now > envelope.expiration) {
         return Bluebird.resolve();
       }
 
-      const message: Rabbitr.IMessage<TInput> = objectAssign(envelope, {
-        data: envelope.data.d,
+      const message: Rabbitr.IMessage<TInput> = objectAssign({}, envelopedMessage, {
+        data: envelope.d,
         isRPC: true,
         responseHeaders: {},
       });
@@ -727,7 +729,7 @@ class Rabbitr {
           this._publishChannel.sendToQueue(
             // doesn't need wrapping in this.formatName as the rpcExec function
             //   already formats the return queue name as required
-            envelope.data.returnQueue,
+            envelope.returnQueue,
             new Buffer(stringify(data)),
             {
               contentType: 'application/json',
@@ -796,9 +798,11 @@ declare module Rabbitr {
     ((message: IMessage<TData>) => PromiseLike<void>) |
     ((message: IMessage<TData>, respond: ErrorCallback) => void);
 
+  export interface Headers { [header: string]: string; }
+
   export interface IRpcExecOptions {
     timeout?: number;
-    headers?: { [header: string]: string; };
+    headers?: any; // Headers;
   }
   export interface IRpcListenerOptions<TInput, TOutput> {
     middleware?: Function[];
@@ -814,10 +818,10 @@ declare module Rabbitr {
     durable?: boolean;
   }
   export interface ISendOptions {
-    headers?: { [header: string]: string; };
+    headers?: any; // Headers;
   }
   export interface ISetTimerOptions {
-    headers?: { [header: string]: string; };
+    headers?: any; // Headers;
   }
 
   export interface IMessage<TData> {
