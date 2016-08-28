@@ -282,11 +282,12 @@ class Rabbitr {
   send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Bluebird<void>;
 
   send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void> {
+    // istanbul ignore next
     if (typeof opts === 'function') {
       let tmp = cb;
       cb = opts as any;
       opts = tmp as any;
-    } else if (typeof cb !== 'function') {
+    } else if (cb && typeof cb !== 'function') {
       opts = cb as any;
       cb = null;
     }
