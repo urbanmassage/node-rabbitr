@@ -231,6 +231,7 @@ class Rabbitr {
   }
 
   private _formatName(name: string): string {
+    // istanbul ignore next
     if (this.opts.queuePrefix) {
       return `${this.opts.queuePrefix}.${name}`;
     }

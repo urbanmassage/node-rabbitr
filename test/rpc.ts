@@ -64,10 +64,10 @@ describe('rabbitr#rpc', function() {
     const queueName = v4() + '.rpc_test';
 
     const testData = {
-      testProp: 'rpc-example-data-' + queueName
+      testProp: `rpc-example-data-${queueName}`,
     };
     const responseData = {
-      testing: 'return-'+queueName
+      testing: `return-${queueName}`,
     };
 
     return rabbit.rpcListener(queueName, message => {
@@ -173,6 +173,28 @@ describe('rabbitr#rpc', function() {
             expect(err).to.have.property('name').that.equals('TimeoutError');
           }
         )
+      );
+  });
+
+  it('ignores expired rpc requests', () => {
+    const queueName = `${v4()}.rpc_test`;
+    let callCount = 0;
+
+    let call = rabbit.rpcExec(queueName, {}, {timeout: 100});
+
+    return Bluebird.delay(100)
+      .then(() =>
+        rabbit.rpcListener(queueName, message => {
+          ++ callCount;
+          return Bluebird.resolve();
+        })
+          .then(() => createdQueues.push(`rpc.${queueName}`))
+      )
+      .then(
+        () => {
+          expect(call.isResolved()).to.equal(true);
+          expect(callCount).to.equal(0);
+        }
       );
   });
 });
