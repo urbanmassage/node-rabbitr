@@ -5,11 +5,9 @@ const rabbit = new Rabbitr({
 
 rabbit.subscribe('example.queue');
 rabbit.bindExchangeToQueue('example.exchange', 'example.queue');
-rabbit.on('example.queue', (message, done) => {
+rabbit.on('example.queue', (message) => {
   console.log('Got message', message);
   console.log('Message data is', message.data);
-
-  done();
 
   setTimeout(function() {
     process.exit(0);

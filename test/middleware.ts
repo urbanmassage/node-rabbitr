@@ -62,7 +62,7 @@ describe('rabbitr#middleware', function() {
 
     rabbit.middleware(middleware)
 
-    return rabbit.rpcListener(queueName, message => {
+    return rabbit.rpcListener(queueName, {}, message => {
       // here we'll assert that the data is the same
       expect(message.data).to.deep.equal(testData);
 
@@ -107,7 +107,7 @@ describe('rabbitr#middleware', function() {
 
     rabbit.middleware(middleware)
 
-    return rabbit.rpcListener(queueName, message => {
+    return rabbit.rpcListener(queueName, {}, message => {
       // here we'll assert that the data is the same
       expect(message.data).to.deep.equal(testData);
 
@@ -156,12 +156,10 @@ describe('rabbitr#middleware', function() {
           )
       );
 
-    rabbit.on(queueName, function(message, reply) {
-      Bluebird
+    rabbit.on(queueName, function(message) {
+      return Bluebird
         .try(() => {
           expect(middleware).to.be.calledOnce;
-
-          reply();
 
           expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
         })
@@ -192,7 +190,8 @@ describe('rabbitr#middleware', function() {
           error => {
             if (error.message !== errorMessage) throw error;
           }
-        );
+        )
+        .asCallback(done);
     });
 
     rabbit.middleware(middleware)
@@ -209,16 +208,15 @@ describe('rabbitr#middleware', function() {
           )
       );
 
-    rabbit.on(queueName, function(message, reply) {
-      Bluebird
+    rabbit.on(queueName, function(message) {
+      return Bluebird
         .try(() => {
           expect(middleware).to.be.calledOnce;
 
           expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
 
-          reply(new Error(errorMessage));
-        })
-        .asCallback(done);
+          throw new Error(errorMessage);
+        });
     });
   });
 });

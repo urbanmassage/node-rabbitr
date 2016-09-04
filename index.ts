@@ -191,7 +191,7 @@ class Rabbitr {
           this.connected = true;
 
           this.log('ready');
-          return (this.opts.setup ? this.opts.setup() : Bluebird.resolve())
+          return Bluebird.resolve(this.opts.setup ? this.opts.setup() : null)
             .then(() => {
               this.ready = true;
               return conn;
@@ -677,7 +677,7 @@ class Rabbitr {
     this.middlewareFn.push(fn);
   }
 
-  private useMiddleware(message: Rabbitr.IMessage<any>, next: () => PromiseLike<any>): Bluebird<any> {
+  private useMiddleware<T>(message: Rabbitr.IMessage<any>, next: () => T | PromiseLike<T>): Bluebird<T> {
     return Bluebird.try(
       this.middlewareFn.reduce<typeof next>(function(next, middlewareFn) {
         return middlewareFn.bind(null, message, next) as typeof next;
@@ -697,7 +697,7 @@ declare module Rabbitr {
     queuePrefix?: string;
 
     /** called once the connection is ready but before anything is bound (allows for ORM setup etc) */
-    setup?: () => PromiseLike<void>;
+    setup?: () => void | PromiseLike<void>;
     connectionOpts?: {
       heartbeat?: boolean;
     };
@@ -707,7 +707,7 @@ declare module Rabbitr {
   }
 
   export type IEventListener<TData> =
-    ((message: IMessage<TData>) => PromiseLike<void>);
+    ((message: IMessage<TData>) => void | PromiseLike<void>);
 
   export interface IRpcExecOptions {
     timeout?: number;
@@ -717,7 +717,7 @@ declare module Rabbitr {
     prefetch?: number;
   }
   export type IRpcListenerExecutor<TInput, TOutput> =
-    ((message: IMessage<TInput>) => PromiseLike<TOutput>);
+    ((message: IMessage<TInput>) => TOutput | PromiseLike<TOutput>);
 
   export interface ISubscribeOptions {
     prefetch?: number;
@@ -751,7 +751,7 @@ declare module Rabbitr {
   }
 
   export interface Middleware {
-    (fn: (message: IMessage<any>, next: () => Bluebird<any | void>) => PromiseLike<any | void>): void;
+    (fn: (message: IMessage<any>, next: () => Bluebird<any | void>) => void | PromiseLike<any | void>): void;
   }
 }
 
