@@ -21,7 +21,7 @@ describe('shutdown', function() {
       rabbit.whenReady(),
       rabbit2.whenReady(),
     ]).then(() =>
-      rabbit.rpcListener(queueName, message => {
+      rabbit.rpcListener(queueName, {}, message => {
         throw new Error('Got a message on non-whitelisted queue');
       })
     ).then(() =>
@@ -64,7 +64,7 @@ describe('shutdown', function() {
       rabbit.whenReady(),
       rabbit2.whenReady(),
     ]).then(() =>
-      rabbit.rpcListener(queueName, message => {
+      rabbit.rpcListener(queueName, {}, message => {
         return Bluebird.resolve(expected).delay(DELAY);
       })
     ).then(() =>

@@ -20,15 +20,13 @@ describe('rabbitr#destroy', function() {
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
-    rabbit.whenReady(() => {
+    rabbit.whenReady().then(() => {
       rabbit.subscribe(queueName);
       rabbit.bindExchangeToQueue(exchangeName, queueName);
       rabbit.on(exchangeName, () => Bluebird.resolve());
 
       setTimeout(function() {
-        rabbit.destroy((err) => {
-          done(err);
-        });
+        rabbit.destroy().asCallback(done);
       }, 200);
     });
   });
@@ -39,14 +37,12 @@ describe('rabbitr#destroy', function() {
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
-    rabbit.whenReady(() => {
-      rabbit.rpcListener(channelName, () => Bluebird.resolve());
+    rabbit.whenReady().then(() => {
+      rabbit.rpcListener(channelName, {}, () => Bluebird.resolve());
       rabbit.rpcExec(channelName, {}, () => void 0);
 
       setTimeout(function() {
-        rabbit.destroy((err) => {
-          done(err);
-        });
+        rabbit.destroy().asCallback(done);
       }, 200);
     });
   });

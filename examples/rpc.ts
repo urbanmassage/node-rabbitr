@@ -5,13 +5,13 @@ const rabbit = new Rabbitr({
   queuePrefix: 'yo'
 });
 
-rabbit.rpcListener('example.rpc', function(message, cb) {
+rabbit.rpcListener('example.rpc', {}, function(message) {
   console.log('Got message', message);
   console.log('Message data is', message.data);
 
-  cb(null, {
+  return {
     thisIs: 'the-response'
-  })
+  };
 });
 
 rabbit.rpcExec('example.rpc', {
