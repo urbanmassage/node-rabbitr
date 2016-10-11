@@ -10,21 +10,6 @@ import {stringify, stringifyError, parse, parseError} from './lib/serialization'
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 
-function maybeFromCallback<T>(
-  fn:
-    ((done: Rabbitr.Callback<T>) => void) |
-    (() => PromiseLike<T>)
-): Bluebird<T> {
-  let callback: Rabbitr.Callback<T>;
-  let promise = Bluebird.fromCallback<T>(_callback => (callback = _callback) && void 0);
-
-  let val = (fn as Function)(callback);
-  if (val && val.then) {
-    return Bluebird.resolve(val);
-  }
-  return promise;
-}
-
 function bluebirdUnwrapRejection<T>(rejection: T): T;
 function bluebirdUnwrapRejection(rejection: any): any {
   if (rejection && rejection.isOperational && rejection.cause) {
@@ -79,7 +64,7 @@ class Rabbitr {
     if (!this.eventListeners[eventName]) {
       throw new Error(`Triggering an event without a listener: ${eventName}`);
     }
-    return maybeFromCallback<void>(this.eventListeners[eventName].bind(null, message));
+    return this.eventListeners[eventName](message);
   }
 
   private removeAllListeners(): void {
@@ -206,7 +191,7 @@ class Rabbitr {
           this.connected = true;
 
           this.log('ready');
-          return maybeFromCallback<void>(this.opts.setup || (() => Bluebird.resolve()))
+          return Bluebird.resolve(this.opts.setup ? this.opts.setup() : null)
             .then(() => {
               this.ready = true;
               return conn;
@@ -220,8 +205,8 @@ class Rabbitr {
   }
 
   // istanbul ignore next
-  public whenReady(callback?: () => void): Bluebird<void> {
-    return this.connectionPromise.then<void>(() => void 0).asCallback(callback);
+  public whenReady(): Bluebird<void> {
+    return this.connectionPromise.then<void>(() => void 0);
   }
 
   private _formatName(name: string): string {
@@ -235,7 +220,7 @@ class Rabbitr {
 
   private destroyPromise: Bluebird<void>;
   /** method to destroy anything for this instance of rabbitr */
-  destroy(cb?: Rabbitr.ErrorCallback): Bluebird<void> {
+  destroy(): Bluebird<void> {
     if (!this.destroyPromise) {
       this.log(`${red('destroying')}`);
       this.destroyPromise = Bluebird.each(this._openChannels, channel =>
@@ -265,20 +250,20 @@ class Rabbitr {
         );
       });
     }
-    return this.destroyPromise.asCallback(cb);
+    return this.destroyPromise;
   }
 
   // standard pub/sub stuff
 
-  send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
-  send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+  send(topic: string, data: any, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+  send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Bluebird<void>;
 
-  send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void> {
+  send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady().then(() =>
-        this.send(topic, data, cb, opts)
+        this.send(topic, data, opts)
       );
     }
 
@@ -290,27 +275,19 @@ class Rabbitr {
       this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
         contentType: 'application/json',
       });
-    }).asCallback(cb);
+    });
   }
 
 
-  subscribe(topic: string, cb?: Rabbitr.Callback<any>): Bluebird<void>;
-  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): Bluebird<void>;
-  subscribe<TMessage>(topic: string, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
-  subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
+  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions): Bluebird<void>;
+  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions): Bluebird<void>;
 
-  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
-    // istanbul ignore next
-    if (typeof opts === 'function') {
-      cb = <any>opts;
-      opts = null;
-    }
-
+  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady().then(() =>
-        this.subscribe(topic, opts, cb)
+        this.subscribe(topic, opts)
       );
     }
 
@@ -409,16 +386,16 @@ class Rabbitr {
         return Bluebird.fromCallback(callback =>
           channel.consume(this._formatName(topic), processMessage, {}, callback)
         );
-      }).asCallback(cb);
+      });
     });
   }
 
-  bindExchangeToQueue(exchange: string, queue: string, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
+  bindExchangeToQueue(exchange: string, queue: string): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady().then(() =>
-        this.bindExchangeToQueue(exchange, queue, cb)
+        this.bindExchangeToQueue(exchange, queue)
       );
     }
 
@@ -435,7 +412,7 @@ class Rabbitr {
       ).then(ok => {
         return Bluebird.fromCallback(callback => channel.close(callback));
       });
-    }).asCallback(cb);
+    });
   };
 
   // timed queue stuff
@@ -443,12 +420,12 @@ class Rabbitr {
     return `dlq.${topic}.${uniqueID}`;
   }
 
-  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
+  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady().then(() =>
-        this.setTimer(topic, uniqueID, data, ttl, cb)
+        this.setTimer(topic, uniqueID, data, ttl)
       );
     }
 
@@ -471,15 +448,15 @@ class Rabbitr {
         // TODO - should we do anything with this?
         expiration: `${ttl}`,
       });
-    }).asCallback(cb);
+    });
   }
 
-  clearTimer(topic: string, uniqueID: string, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
+  clearTimer(topic: string, uniqueID: string): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady().then(() =>
-        this.clearTimer(topic, uniqueID, cb)
+        this.clearTimer(topic, uniqueID)
       );
     }
 
@@ -489,7 +466,7 @@ class Rabbitr {
 
     return Bluebird.fromCallback(callback =>
       this._timerChannel.deleteQueue(timerQueue, {}, callback)
-    ).asCallback(cb);
+    );
   }
 
   // rpc stuff
@@ -520,25 +497,16 @@ class Rabbitr {
     });
   }
 
-  rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Bluebird<any>;
-  rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): Bluebird<any>;
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
+  rpcExec(topic: string, data: any, opts?: Rabbitr.IRpcExecOptions): Bluebird<any>;
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions): Bluebird<TOutput>;
 
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
+  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions): Bluebird<TOutput> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady().then(() =>
-        this.rpcExec<TInput, TOutput>(topic, data, opts, cb)
+        this.rpcExec<TInput, TOutput>(topic, data, opts)
       );
-    }
-
-    // istanbul ignore next
-    if ('function' === typeof opts) {
-      // shift arguments
-      cb = <Rabbitr.Callback<TOutput>>opts;
-      opts = null;
     }
 
     // this will send the data down the topic and then open up a unique return queue
@@ -622,29 +590,19 @@ class Rabbitr {
           throw error;
         });
       });
-    }).asCallback(cb);
+    });
   }
 
-  rpcListener(topic: string, executor: Rabbitr.IRpcListenerExecutor<any, any>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
-  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
-  rpcListener<TInput, TOutput>(topic: string, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
-  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
+  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>): Bluebird<void>;
+  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): Bluebird<void>;
 
-  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?, callback?: Rabbitr.ErrorCallback): Bluebird<void> {
+  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?): Bluebird<void> {
     // istanbul ignore next
     if (!this.connectionPromise.isFulfilled()) {
       // delay until ready
       return this.whenReady().then(() =>
         this.rpcListener(topic, opts, executor)
       );
-    }
-
-    // istanbul ignore next
-    if ('function' === typeof opts) {
-      // shift arguments
-      callback = executor as any;
-      executor = opts as any;
-      opts = {};
     }
 
     var rpcQueue = this._rpcQueueName(topic);
@@ -709,7 +667,7 @@ class Rabbitr {
         skipMiddleware: true,
         durable: false,
       })
-    ).asCallback(callback);
+    );
   }
 
   // #region middleware
@@ -719,7 +677,7 @@ class Rabbitr {
     this.middlewareFn.push(fn);
   }
 
-  private useMiddleware(message: Rabbitr.IMessage<any>, next: () => PromiseLike<any>): Bluebird<any> {
+  private useMiddleware<T>(message: Rabbitr.IMessage<any>, next: () => T | PromiseLike<T>): Bluebird<T> {
     return Bluebird.try(
       this.middlewareFn.reduce<typeof next>(function(next, middlewareFn) {
         return middlewareFn.bind(null, message, next) as typeof next;
@@ -739,7 +697,7 @@ declare module Rabbitr {
     queuePrefix?: string;
 
     /** called once the connection is ready but before anything is bound (allows for ORM setup etc) */
-    setup?: ((done: Rabbitr.ErrorCallback) => void) | (() => PromiseLike<void>);
+    setup?: () => void | PromiseLike<void>;
     connectionOpts?: {
       heartbeat?: boolean;
     };
@@ -748,18 +706,8 @@ declare module Rabbitr {
     defaultRPCExpiry?: number;
   }
 
-  export interface ErrorCallback {
-    (err: Error): void;
-  }
-
-  export interface Callback<T> {
-    (err: Error): void;
-    (err: Error, data: T): void;
-  }
-
   export type IEventListener<TData> =
-    ((message: IMessage<TData>) => PromiseLike<void>) |
-    ((message: IMessage<TData>, respond: ErrorCallback) => void);
+    ((message: IMessage<TData>) => void | PromiseLike<void>);
 
   export interface IRpcExecOptions {
     timeout?: number;
@@ -769,8 +717,7 @@ declare module Rabbitr {
     prefetch?: number;
   }
   export type IRpcListenerExecutor<TInput, TOutput> =
-    ((message: IMessage<TInput>) => PromiseLike<TOutput>) |
-    ((message: IMessage<TInput>, respond: Callback<TOutput>) => void);
+    ((message: IMessage<TInput>) => TOutput | PromiseLike<TOutput>);
 
   export interface ISubscribeOptions {
     prefetch?: number;
@@ -785,13 +732,12 @@ declare module Rabbitr {
     channel: amqplib.Channel;
     data: TData;
 
-    send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
-    send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+    send(topic: string, data: any, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+    send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Bluebird<void>;
 
-    rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Bluebird<any>;
-    rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): Bluebird<any>;
-    rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
-    rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
+    rpcExec(topic: string, data: any): Bluebird<any>;
+    rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions): Bluebird<any>;
+    rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions): Bluebird<TOutput>;
 
     isRPC: boolean;
   }
@@ -805,7 +751,7 @@ declare module Rabbitr {
   }
 
   export interface Middleware {
-    (fn: (message: IMessage<any>, next: () => Bluebird<any | void>) => PromiseLike<any | void>): void;
+    (fn: (message: IMessage<any>, next: () => Bluebird<any | void>) => void | PromiseLike<any | void>): void;
   }
 }
 

@@ -58,15 +58,14 @@ describe('rabbitr#setTimer', function() {
           )
       );
 
-    rabbit.on(queueName, function(message, reply) {
-      Bluebird.try(() => {
-        reply();
-
+    rabbit.on(queueName, function(message) {
+      return Bluebird.try(() => {
         // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
         const delay = Math.abs(new Date().getTime() - start);
         expect(delay).to.be.above(DELAY - ACCEPTABLE_TIMER_THRESHOLD);
         expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
-      }).asCallback(done);
+      })
+      .asCallback(done);
     });
   });
 
@@ -91,9 +90,7 @@ describe('rabbitr#setTimer', function() {
       );
 
     // listen for messages on the queue - nothing should be received here if this works!
-    rabbit.on(queueName, function(message, done) {
-      done();
-
+    rabbit.on(queueName, function(message) {
       receivedMessages++;
     });
 
