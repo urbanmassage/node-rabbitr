@@ -1,7 +1,7 @@
 import {expect} from 'chai';
 import Rabbitr = require('../');
 import Bluebird = require('bluebird');
-import {v4} from 'node-uuid';
+import {v4} from 'uuid';
 
 const timesAsync = (times: number, fn: (step: number) => PromiseLike<any>) => {
   let step = (n: number) => {

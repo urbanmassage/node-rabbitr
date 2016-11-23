@@ -1,7 +1,7 @@
 import Bluebird = require('bluebird');
 import Rabbitr = require('../');
 import {expect} from 'chai';
-import {v4} from 'node-uuid';
+import {v4} from 'uuid';
 
 describe('shutdown', function() {
   it('should skip rpc after shutdown is triggered', () => {

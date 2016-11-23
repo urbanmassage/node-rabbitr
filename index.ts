@@ -2,7 +2,7 @@ import {cyan, red, yellow} from 'chalk';
 
 import amqplib = require('amqplib/callback_api');
 import objectAssign = require('object-assign');
-import {v4} from 'node-uuid';
+import {v4} from 'uuid';
 import Bluebird = require('bluebird');
 
 import {initWhitelist, shouldSkipSubscribe, log} from './lib/debug';

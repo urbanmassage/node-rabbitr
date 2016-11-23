@@ -1,7 +1,7 @@
 import Bluebird = require('bluebird');
 import Rabbitr = require('../');
 import {expect} from 'chai';
-import {v4} from 'node-uuid';
+import {v4} from 'uuid';
 
 describe('rabbitr#pubsub', function() {
   let rabbit: Rabbitr;

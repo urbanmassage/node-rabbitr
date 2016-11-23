@@ -5,7 +5,7 @@ use(sinonChai);
 
 import Bluebird = require('bluebird');
 import Rabbitr = require('../');
-import {v4} from 'node-uuid';
+import {v4} from 'uuid';
 
 describe('rabbitr#middleware', function() {
   let rabbit: Rabbitr;

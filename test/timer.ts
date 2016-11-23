@@ -1,7 +1,7 @@
 import Bluebird = require('bluebird');
 import Rabbitr = require('../');
 import {expect} from 'chai';
-import {v4} from 'node-uuid';
+import {v4} from 'uuid';
 
 const ACCEPTABLE_TIMER_THRESHOLD = 10;
 
