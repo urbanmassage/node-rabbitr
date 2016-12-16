@@ -18,7 +18,7 @@ describe('debug', function() {
 
     const response = {test: 2};
 
-    rabbit.rpcListener(queueName, message => {
+    rabbit.rpcListener(queueName, {}, message => {
       return Bluebird.resolve(response);
     });
 
@@ -38,7 +38,7 @@ describe('debug', function() {
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
 
-    rabbit.rpcListener(queueName, message => {
+    rabbit.rpcListener(queueName, {}, message => {
       throw new Error('Got a message on non-whitelisted queue');
     });
 
