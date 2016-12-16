@@ -43,6 +43,33 @@ describe('rabbitr#rpc', function() {
       testing: 'return-'+queueName
     };
 
+    return rabbit.rpcListener(queueName, {}, message => {
+      // here we'll assert that the data is the same
+      expect(message.data).to.deep.equal(testData);
+
+      return Bluebird.resolve(responseData);
+    })
+      .then(() => createdQueues.push('rpc.' + queueName))
+      .then(() =>
+        rabbit.rpcExec(queueName, testData, {})
+          .then(data => {
+            // here we'll assert that the data is the same -
+            // hitting this point basically means the test has passed anyway :)
+            expect(data).to.deep.equal(responseData);
+          })
+      );
+  });
+
+  it('should receive messages on rpcListener (shifted arguments)', () => {
+    const queueName = v4() + '.rpc_test';
+
+    const testData = {
+      testProp: `rpc-example-data-${queueName}`,
+    };
+    const responseData = {
+      testing: `return-${queueName}`,
+    };
+
     return rabbit.rpcListener(queueName, message => {
       // here we'll assert that the data is the same
       expect(message.data).to.deep.equal(testData);
@@ -51,7 +78,7 @@ describe('rabbitr#rpc', function() {
     })
       .then(() => createdQueues.push('rpc.' + queueName))
       .then(() =>
-        rabbit.rpcExec(queueName, testData)
+        Bluebird.fromCallback(cb => rabbit.rpcExec(queueName, testData, cb))
           .then(data => {
             // here we'll assert that the data is the same -
             // hitting this point basically means the test has passed anyway :)
@@ -65,7 +92,7 @@ describe('rabbitr#rpc', function() {
 
     const error = new Error('Test');
 
-    return rabbit.rpcListener(queueName, message => {
+    return rabbit.rpcListener(queueName, {}, message => {
       return Bluebird.reject(error);
     })
       .then(() => createdQueues.push('rpc.' + queueName))
@@ -94,7 +121,7 @@ describe('rabbitr#rpc', function() {
 
     const error = {a: 'b', c: 'd', name: 'Error', message: 'test'};
 
-    return rabbit.rpcListener(queueName, message =>
+    return rabbit.rpcListener(queueName, {}, message =>
       Bluebird.reject(error)
     )
       .then(() => createdQueues.push('rpc.' + queueName))
@@ -114,7 +141,7 @@ describe('rabbitr#rpc', function() {
 
     const data = 'Hello world!';
 
-    rabbit.rpcListener(queueName, message => {
+    rabbit.rpcListener(queueName, {}, message => {
       expect(message.data).to.be.an.instanceOf(Buffer);
       expect(message.data.toString()).to.equal(data);
       return Bluebird.resolve(new Buffer(data));
@@ -132,8 +159,9 @@ describe('rabbitr#rpc', function() {
   it('timeouts', () => {
     const queueName = v4() + '.rpc_test';
 
-    return rabbit.rpcListener(queueName, message => {
+    return rabbit.rpcListener(queueName, {}, message => {
       // No reply...
+      return new Bluebird(() => {})
     })
       .then(() => createdQueues.push('rpc.' + queueName))
       .then(() =>
@@ -145,6 +173,28 @@ describe('rabbitr#rpc', function() {
             expect(err).to.have.property('name').that.equals('TimeoutError');
           }
         )
+      );
+  });
+
+  it('ignores expired rpc requests', () => {
+    const queueName = `${v4()}.rpc_test`;
+    let callCount = 0;
+
+    let call = rabbit.rpcExec(queueName, {}, {timeout: 100});
+
+    return Bluebird.delay(100)
+      .then(() =>
+        rabbit.rpcListener(queueName, message => {
+          ++ callCount;
+          return Bluebird.resolve();
+        })
+          .then(() => createdQueues.push(`rpc.${queueName}`))
+      )
+      .then(
+        () => {
+          expect(call.isResolved()).to.equal(true);
+          expect(callCount).to.equal(0);
+        }
       );
   });
 });

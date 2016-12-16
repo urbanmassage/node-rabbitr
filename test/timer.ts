@@ -54,19 +54,55 @@ describe('rabbitr#setTimer', function() {
             createdExchanges.push(queueName)
           )
           .then(() =>
-            rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY)
+            rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY, {})
           )
       );
 
-    rabbit.on(queueName, function(message) {
+    rabbit.on(queueName, function(message, reply) {
       Bluebird.try(() => {
-        message.ack();
+        reply();
 
         // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
         const delay = Math.abs(new Date().getTime() - start);
         expect(delay).to.be.above(DELAY - ACCEPTABLE_TIMER_THRESHOLD);
         expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
       }).asCallback(done);
+    });
+  });
+
+  it('should receive a message after a set number of milliseconds (shifted arguments)', function(done) {
+    const DELAY = 50;
+
+    const queueName = v4() + '.timer_test';
+
+    const start = new Date().getTime();
+
+    const testData = {
+      testProp: 'timed-example-data-' + queueName
+    };
+
+    rabbit.subscribe(queueName)
+      .then(() => createdQueues.push(queueName))
+      .then(() =>
+        rabbit.bindExchangeToQueue(queueName, queueName)
+          .then(() =>
+            createdExchanges.push(queueName)
+          )
+          .then(() =>
+            Bluebird.fromCallback(
+              cb => rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY, cb)
+            )
+          )
+      );
+
+    rabbit.on(queueName, function(message) {
+      return Bluebird.try(() => {
+        // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
+        const delay = Math.abs(new Date().getTime() - start);
+        expect(delay).to.be.above(DELAY - ACCEPTABLE_TIMER_THRESHOLD);
+        expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
+      })
+      .asCallback(done);
     });
   });
 
@@ -92,8 +128,6 @@ describe('rabbitr#setTimer', function() {
 
     // listen for messages on the queue - nothing should be received here if this works!
     rabbit.on(queueName, function(message) {
-      message.ack();
-
       receivedMessages++;
     });
 
