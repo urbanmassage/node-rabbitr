@@ -500,7 +500,7 @@ class Rabbitr extends EventEmitter {
     return `rpc.${topic}`;
   }
 
-  private _getTempQueue(queueName: string, channel: amqplib.Channel) {
+  private _createTempQueue(queueName: string, channel: amqplib.Channel) {
     this.log(`creating temp queue ${cyan(queueName)}`)
     return Bluebird.fromCallback<amqplib.Replies.AssertQueue>(callback =>
       channel.assertQueue(queueName, {
@@ -508,19 +508,7 @@ class Rabbitr extends EventEmitter {
         expires: (this.opts.defaultRPCExpiry * 1 + 1000),
         durable: false,
       }, callback)
-    ).disposer(() => {
-      this.log(`deleting temp queue ${cyan(queueName)}`);
-      return Bluebird.fromCallback<any>(callback =>
-        // delete the return queue and close exc channel
-        channel.deleteQueue(queueName, {}, callback)
-      ).catch(error => {
-        // istanbul ignore next
-        console.log(`rabbitr temp queue '${cyan(queueName)}' cleanup exception`, error && error.stack || error);
-        throw error;
-      }).then(() => {
-        this.log(`deleted temp queue ${cyan(queueName)}`);
-      });
-    });
+    );
   }
 
   rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Bluebird<any>;
@@ -556,9 +544,7 @@ class Rabbitr extends EventEmitter {
 
     const channel = this._rpcReturnChannel;
 
-    const queueDisposer = this._getTempQueue(this._formatName(returnQueueName), channel);
-
-    return Bluebird.using(queueDisposer, () => {
+    return this._createTempQueue(this._formatName(returnQueueName), channel).then(() => {
       this.log(`using rpc return queue ${cyan(returnQueueName)}`);
 
       const timeoutMS = (opts && opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
