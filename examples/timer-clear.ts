@@ -5,10 +5,10 @@ const rabbit = new Rabbitr({
 
 rabbit.subscribe('example.timer.to-clear');
 rabbit.bindExchangeToQueue('example.timer.to-clear', 'example.timer.to-clear');
-rabbit.on('example.timer.to-clear', (message) => {
+rabbit.on('example.timer.to-clear', (message, done) => {
   console.log('This should never fire!!!!');
 
-  message.ack();
+  done();
 
   setTimeout(function() {
     process.exit(1);

@@ -134,6 +134,7 @@ describe('rabbitr#rpc', function() {
 
     return rabbit.rpcListener(queueName, message => {
       // No reply...
+      return new Bluebird(() => {})
     })
       .then(() => createdQueues.push('rpc.' + queueName))
       .then(() =>
