@@ -1,10 +1,10 @@
 {
   "name": "rabbitr",
-  "version": "8.4.0",
+  "version": "9.0.0-rc1",
   "description": "RabbitMQ made easy for nodejs",
   "main": "index",
   "scripts": {
-    "typings": "typings install && typings prune",
+    "prepublish": "typings install && typings prune",
     "build": "tsc -p .",
     "test": "DEBUG=rabbit* mocha -gc",
     "coverage": "nyc --reporter=lcov --reporter=text mocha",
@@ -25,11 +25,13 @@
   "devDependencies": {
     "chai": "^3.5.0",
     "codecov.io": "^0.1.6",
-    "mocha": "^2.5.3",
-    "nyc": "^7.0.0",
+    "mocha": "^3.0.0",
+    "nyc": "^8.0.0",
+    "sinon": "^1.17.5",
+    "sinon-chai": "^2.8.0",
     "source-map-support": "^0.4.1",
     "typescript": "^1.8.10",
-    "typings": "^1.3.1"
+    "typings": "^2.0.0"
   },
   "typings": "index.d.ts",
   "directories": {
