@@ -23,7 +23,6 @@ rabbit.subscribe('sms.send.booking.create');
 rabbit.bindExchangeToQueue('booking.create', 'sms.send.booking.create');
 rabbit.on('sms.send.booking.create', function(message) {
 	// send an sms
-	message.ack();
 });
 
 // in another module
@@ -31,7 +30,9 @@ rabbit.subscribe('email.send.booking.create');
 rabbit.bindExchangeToQueue('booking.create', 'email.send.booking.create');
 rabbit.on('email.send.booking.create', function(message) {
 	// send an email
-	message.ack();
+
+	// you can also return a promise
+	return Promise.resolve();
 });
 
 // elsewhere
@@ -45,64 +46,46 @@ Rabbitr makes using dead letter exchanges dead easy
 // set timer
 rabbit.subscribe('booking.not-confirmed.timer.set');
 rabbit.bindExchangeToQueue('booking.create', 'booking.not-confirmed.timer.set');
-rabbit.on('booking.not-confirmed.timer.set', function(message) {
+rabbit.on('booking.not-confirmed.timer.set', message => {
 	// do something to calculate how long we want the timer to last
 	var timeFromNow = 900000; // 15 mins
 
 	rabbit.setTimer('booking.not-confirmed.timer.fire', message.data.id, {
-    id: message.data.id,
+		id: message.data.id,
 	}, timeFromNow);
-
-	message.ack();
 });
 
 // clear timer if something has happened that means the timer action isn't required
 rabbit.subscribe('booking.not-confirmed.timer.clear');
 rabbit.bindExchangeToQueue('booking.confirm', 'booking.not-confirmed.timer.clear');
-rabbit.on('booking.not-confirmed.timer.clear', function(message) {
+rabbit.on('booking.not-confirmed.timer.clear', message => {
 	rabbit.clearTimer('booking.not-confirmed.timer.fire', message.data.id);
-
-	message.ack();
+	return Promise.resolve(); // optional
 });
 
 // handle the timer firing
 rabbit.subscribe('booking.not-confirmed.timer.fire');
 rabbit.bindExchangeToQueue('booking.not-confirmed.timer.fire', 'booking.not-confirmed.timer.fire');
-rabbit.on('booking.not-confirmed.timer.fire', function(message) {
+rabbit.on('booking.not-confirmed.timer.fire', message => {
 	// do something off the back of the timer firing
 	// in this example, message.data.id is the booking id that wasn't confirmed in time
-	message.ack();
+	return Promise.resolve(); // optional
 });
 ```
 
 ## RPC (remote procedure call)
 Use Rabbitr's RPC methods if you need to do something and get a response back, and you want to decouple the two processes via MQ
 
-- Make sure you use the same major version of Rabbitr on both the worker and scheduler sides!
+- Make sure you use the same version of Rabbitr on both the worker and scheduler sides!
 
-### Define the worker's method (series)
-
-```js
-rabbit.rpcListener('rpc-test', function(message, cb) {
-	// do something with message.data
-
-	cb(null, {
-    rpc: 'is cool'
-	});
-});
-```
-
-### Define the worker's method (parallel, kind of)
+### Define the worker's method
 
 ```js
-rabbit.rpcListener('rpc-test', function(message, cb) {
-	// immediately moves on to processing the next
-	message.ack();
-
+rabbit.rpcListener('rpc-test', message => {
 	// do something with message.data
 
-	cb(null, {
-    rpc: 'is cool'
+	return Promise.resolve({
+		rpc: 'is cool'
 	});
 });
 ```
@@ -110,10 +93,14 @@ rabbit.rpcListener('rpc-test', function(message, cb) {
 ### Calling the worker's RPC
 
 ```js
-rabbit.rpcExec('rpc-test', { some: 'data' }, function(err, response) {
-	// do something with `response`
-	// it will look like { rpc: 'is cool' }
-});
+rabbit.rpcExec('rpc-test', { some: 'data' })
+	.then(message => {
+		// do something with message.data
+		// message.data will look like { rpc: 'is cool' }
+	})
+	.catch(err => {
+		// handle errors
+	});
 ```
 
 ## Debugging
