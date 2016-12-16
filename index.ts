@@ -267,6 +267,10 @@ class Rabbitr extends EventEmitter {
   /** @private */
   on(topic: string, cb: (data: Rabbitr.IEnvelopedMessage<any>) => void): this;
 
+  on(...args) {
+    return (super.on as any)(...args);
+  }
+
   subscribe(topic: string, cb?: Rabbitr.Callback<any>): Bluebird<void>;
   subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): Bluebird<void>;
   subscribe<TMessage>(topic: string, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
