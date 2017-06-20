@@ -1,14 +1,16 @@
 # CHANGELOG
 
+## 8.6.0
+- graceful shutdown now triggered by SIGINT or SIGTERM
+
 ## 8.5.0
 - Fixed a race condition that resulted in a fatal error `404, "NOT_FOUND - no queue 'x' in vhost '/'"` when the main thread on the client is blocked.
 
 ## 8.4.0
 - fixed a bug that caused the return value of `rpcExec` and other methods to always be `undefined` if called before the connection was established.
 - introduced debug mode (via `RABBITR_DEBUG` env variable. check README.md)
-- graceful shutdown: when SIGINT is received rabbitr will stop listening for incoming 
-messages but will continue processing pending messages if any and then disconnect from 
-rabbitmq.
+- graceful shutdown: when SIGINT is received rabbitr will stop listening for incoming
+messages but will continue processing pending messages if any and then disconnect from rabbitmq.
 
 ## 8.3.0
 - use node-uuid instead of shortid

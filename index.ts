@@ -144,9 +144,11 @@ class Rabbitr extends EventEmitter {
     ).then(conn => {
       // make sure to close the connection if the process terminates
       process.once('SIGINT', this.shutdown);
+      process.once('SIGTERM', this.shutdown);
 
       conn.on('close', () => {
         process.removeListener('SIGINT', this.shutdown);
+        process.removeListener('SIGTERM', this.shutdown);
         if (!this.isShuttingDown) {
           throw new Error('Disconnected from RabbitMQ');
         }
