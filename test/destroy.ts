@@ -68,8 +68,7 @@ describe('rabbitr#destroy', function() {
             global.gc() && void 0
           )
           .delay(100)
-          .then(resolve, reject)
-          ;
+          .then(() => resolve(), reject);
       });
     }
 

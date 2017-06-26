@@ -5,7 +5,7 @@
   "main": "index",
   "scripts": {
     "typings": "typings install && typings prune",
-    "build": "tsc -p .",
+    "build": "npm run typings && tsc -p .",
     "test": "DEBUG=rabbit* mocha -gc",
     "coverage": "nyc --reporter=lcov --reporter=text mocha",
     "sendcoverage": "if [ -f coverage/lcov.info ]; then cat ./coverage/lcov.info | ./node_modules/codecov.io/bin/codecov.io.js; fi",
