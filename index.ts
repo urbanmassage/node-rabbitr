@@ -10,6 +10,7 @@ import {initWhitelist, shouldSkipSubscribe, log} from './lib/debug';
 import {stringify, stringifyError, parse, parseError} from './lib/serialization';
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
+const BACKOFF_EXPIRY = 2000; // we use a fixed backoff expiry for now of 2 seconds
 
 function maybeFromCallback<T>(fn: ((done: Rabbitr.Callback<T>) => void) | (() => PromiseLike<T>)): Bluebird<T> {
   let callback: Rabbitr.Callback<T>;
@@ -109,6 +110,7 @@ class Rabbitr extends EventEmitter {
   private _openChannels: amqplib.Channel[];
 
   private _timerChannel: amqplib.Channel;
+  private _backoffChannel: amqplib.Channel;
   private _publishChannel: amqplib.Channel;
   private _rpcReturnChannel: amqplib.Channel;
   _cachedChannel: amqplib.Channel;
@@ -160,6 +162,7 @@ class Rabbitr extends EventEmitter {
       ).then(channel => {
         this._timerChannel = channel;
         this._publishChannel = channel;
+        this._backoffChannel = channel;
         this._cachedChannel = channel;
 
         this._openChannels.push(channel);
@@ -344,6 +347,7 @@ class Rabbitr extends EventEmitter {
               channel,
               ack,
               reject,
+              properties: msg.properties,
             };
 
             if (options && options.skipMiddleware) {
@@ -363,10 +367,50 @@ class Rabbitr extends EventEmitter {
               channel.ack(msg);
             },
             // rejected
-            error => {
+            (error) => {
               this.log(`rejecting message ${cyan(topic)}`, data, error);
               console.error(error && error.stack || error);
-              channel.nack(msg);
+
+              // check for backoff at this point
+              if(this.isShuttingDown || (opts && opts.skipBackoff === true)) {
+                // if we're shutting down, or skipBackoff enabled (typically for RPC subscribes), nack immediately
+                channel.nack(msg);
+              } else {
+                // set up a backoff queue
+                const backoffQueueName = this._formatName(topic) + '.reject-backoff';
+
+                return Bluebird.all([
+                  Bluebird.fromCallback(callback =>
+                    // ensure we have a backoff queue
+                    this._backoffChannel.assertQueue(backoffQueueName, {
+                      durable: true,
+                      deadLetterExchange: backoffQueueName,
+                      arguments: {
+                        'x-dead-letter-routing-key': '*',
+                      },
+                      messageTtl: BACKOFF_EXPIRY,
+                    }, callback)
+                  ),
+                  Bluebird.fromCallback(callback =>
+                    // ensure we have a backoff exchange
+                    channel.assertExchange(backoffQueueName, 'topic', {}, callback)
+                  ),
+                ]).then(() =>
+                  Bluebird.fromCallback(callback =>
+                    // ensure we have bound the dead letter exchange back to the original queue
+                    channel.bindQueue(this._formatName(topic), backoffQueueName, '*', {}, callback)
+                  )
+                ).then(() => {
+                  // send the backed-off message
+                  this._backoffChannel.sendToQueue(backoffQueueName, msg.content, msg.properties);
+                  channel.ack(msg);
+                  this.log(`sent backoff message ${cyan(topic)}`, data, error);
+                }).catch(error => {
+                  // we were unable to setup a backoff queue or send the message, nack immediately
+                  this.log(`failed to backoff message ${cyan(topic)}`, data, error);
+                  channel.nack(msg);
+                }).asCallback(cb);
+              }
             }
           );
 
@@ -726,6 +770,7 @@ class Rabbitr extends EventEmitter {
     return this.subscribe(rpcQueue,
       objectAssign({}, opts, {
         skipMiddleware: true,
+        skipBackoff: true,
         durable: false,
       })
     ).asCallback(callback);
@@ -784,6 +829,7 @@ declare module Rabbitr {
   export interface ISubscribeOptions {
     prefetch?: number;
     skipMiddleware?: boolean;
+    skipBackoff?: boolean;
     durable?: boolean;
   }
   export interface ISendOptions {
@@ -796,6 +842,7 @@ declare module Rabbitr {
     topic: string;
     channel: amqplib.Channel;
     data: TData;
+    properties?: any;
 
     send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
     send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
