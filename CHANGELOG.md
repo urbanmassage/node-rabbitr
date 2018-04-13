@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## 11.0.0
+- Removes support for node before version 6
 - Major rewrite which changes a lot of interfaces
 - Removed support for callbacks
 - Made the options object required for a number of calls
