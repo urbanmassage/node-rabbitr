@@ -2,6 +2,7 @@ import Rabbitr = require('../');
 import { expect } from 'chai';
 import { v4 } from 'node-uuid';
 import { fromCallback } from 'promise-cb';
+import { wait } from '../lib/wait';
 
 const ACCEPTABLE_TIMER_THRESHOLD = 10;
 
@@ -79,7 +80,7 @@ describe('rabbitr#setTimer', function() {
     }, DELAY / 2);
 
     // also set a timeout to fire after the message should have already have been delivered to check it wasn't
-    return fromCallback(cb => setTimeout(cb, DELAY))
+    return wait(DELAY)
       .then(() => {
         expect(receivedMessages).to.equal(0);
       });

@@ -2,6 +2,7 @@ import Rabbitr = require('../');
 import { expect } from 'chai';
 import { v4 } from 'node-uuid';
 import { fromCallback } from 'promise-cb';
+import { wait } from '../lib/wait';
 
 describe('rabbitr#rpc', function() {
   let rabbit: Rabbitr;
@@ -118,7 +119,7 @@ describe('rabbitr#rpc', function() {
       expect(message.data.toString()).to.equal(data);
       return new Buffer(data);
     })
-    .then(() => fromCallback(cb => setTimeout(cb, 200)))
+    .then(() => wait(200))
     .then(() => {
       createdQueues.push('rpc.' + queueName);
 
@@ -136,7 +137,7 @@ describe('rabbitr#rpc', function() {
 
     rabbit.rpcListener(queueName, {}, async (message) => {
       // No reply...
-      await fromCallback(cb => setTimeout(cb, 10000));
+      await wait(10000);
       return null;
     });
     createdQueues.push('rpc.' + queueName);

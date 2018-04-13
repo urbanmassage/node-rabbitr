@@ -2,6 +2,7 @@ import { expect } from 'chai';
 import Rabbitr = require('../');
 import { v4 } from 'node-uuid';
 import { fromCallback } from 'promise-cb';
+import { wait } from '../lib/wait';
 
 const timesAsync = (times: number, fn: (step: number) => PromiseLike<any>) => {
   let step = (n: number) => {
@@ -23,7 +24,7 @@ describe('rabbitr#destroy', () => {
 
     rabbit.subscribe([exchangeName], queueName, {}, ({ack}) => ack());
 
-    await fromCallback(cb => setTimeout(cb, 200));
+    await wait(200);
 
     await rabbit.destroy();
   });
@@ -38,7 +39,7 @@ describe('rabbitr#destroy', () => {
     rabbit.rpcListener(channelName, {}, () => { return null; });
     rabbit.rpcExec(channelName, { test: 'data' }, {});
 
-    await fromCallback(cb => setTimeout(cb, 200));
+    await wait(200);
 
     await rabbit.destroy();
   });
@@ -53,11 +54,11 @@ describe('rabbitr#destroy', () => {
         url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
       });
 
-      await fromCallback(cb => setTimeout(cb, 200));
+      await wait(200);
 
       await rabbit.destroy();
 
-      await fromCallback(cb => setTimeout(cb, 200));
+      await wait(200);
     }
 
     /** number of times to run a connection cycle */
