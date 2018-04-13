@@ -1,86 +1,76 @@
 import {expect} from 'chai';
 import Rabbitr = require('../');
-import Bluebird = require('bluebird');
 import {v4} from 'node-uuid';
+import {fromCallback} from 'promise-cb';
 
 const timesAsync = (times: number, fn: (step: number) => PromiseLike<any>) => {
   let step = (n: number) => {
     if (n === times) return;
-    return Bluebird.resolve(n).then(fn).then(() => step(n + 1));
+    return Promise.resolve(n).then(fn).then(() => step(n + 1));
   };
 
   return step(0);
 }
 
-describe('rabbitr#destroy', function() {
-  it('should be able to destroy an instance with pubsub listeners', function(done) {
+describe('rabbitr#destroy', () => {
+  it('should be able to destroy an instance with pubsub listeners', async () => {
     const exchangeName = v4() + '.test';
     const queueName = v4() + '.test';
 
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
-    rabbit.whenReady(() => {
-      rabbit.subscribe(queueName);
-      rabbit.bindExchangeToQueue(exchangeName, queueName);
-      rabbit.on(exchangeName, ({ack}) => ack());
 
-      setTimeout(function() {
-        rabbit.destroy((err) => {
-          done(err);
-        });
-      }, 200);
-    });
+    rabbit.subscribe(queueName, {}, ({ack}) => ack());
+    rabbit.bindExchangeToQueue(exchangeName, queueName);
+
+    await fromCallback(cb => setTimeout(cb, 200));
+
+    await rabbit.destroy();
   });
 
-  it('should be able to destroy an instance with rpc listeners', function(done) {
+  it('should be able to destroy an instance with rpc listeners', async () => {
     const channelName = v4() + '.rpc_test';
 
     const rabbit = new Rabbitr({
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
-    rabbit.whenReady(() => {
-      rabbit.rpcListener(channelName, ({ack}) => ack());
-      rabbit.rpcExec(channelName, {}, () => void 0);
 
-      setTimeout(function() {
-        rabbit.destroy((err) => {
-          done(err);
-        });
-      }, 200);
-    });
+    rabbit.rpcListener(channelName, {}, () => { return null; });
+    rabbit.rpcExec(channelName, { test: 'data' }, {});
+
+    await fromCallback(cb => setTimeout(cb, 200));
+
+    await rabbit.destroy();
   });
 
   let ifGcIt = global.gc && parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) >= 5 ? it : it.skip;
 
-  ifGcIt('doesn\'t leak', function() {
-    function runCycle() {
+  ifGcIt('doesn\'t leak', function(done) {
+    this.timeout(10000);
+
+    async function runCycle() {
       const rabbit = new Rabbitr({
         url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
       });
 
-      return new Bluebird((resolve, reject) => {
-        rabbit.whenReady()
-          .then(() =>
-            rabbit.destroy()
-          )
-          .then(() =>
-            global.gc() && void 0
-          )
-          .delay(100)
-          .then(() => resolve(), reject);
-      });
+      await fromCallback(cb => setTimeout(cb, 200));
+
+      await rabbit.destroy();
+
+      await fromCallback(cb => setTimeout(cb, 200));
     }
 
     /** number of times to run a connection cycle */
     let times = 5;
 
     // run a cycle before so we get accurate measures.
-    return timesAsync(times, runCycle).then(() => {
+    timesAsync(times, runCycle).then(() => {
       const {heapUsed} = process.memoryUsage();
 
       return timesAsync(times, runCycle).then(() => {
-        expect(process.memoryUsage().heapUsed).to.be.lessThan(heapUsed * 1.01);
+        expect(process.memoryUsage().heapUsed).to.be.lessThan(heapUsed * 1.1);
+        done();
       });
     });
   });

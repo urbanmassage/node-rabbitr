@@ -1,7 +1,7 @@
-import Bluebird = require('bluebird');
 import Rabbitr = require('../');
 import {expect} from 'chai';
 import {v4} from 'node-uuid';
+import {fromCallback} from 'promise-cb';
 
 describe('rabbitr#backoff', function() {
   let rabbit: Rabbitr;
@@ -10,24 +10,20 @@ describe('rabbitr#backoff', function() {
       rabbit = new Rabbitr({
         url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
       })
-    ).whenReady()
+    )
   );
 
   const createdExchanges: string[] = [];
   const createdQueues: string[] = [];
 
   after(() =>
-    Bluebird.all([
+    Promise.all([
       // cleanup
       ...createdExchanges.map(exchangeName =>
-        Bluebird.fromCallback(cb =>
-          rabbit._cachedChannel.deleteExchange(exchangeName, {}, cb)
-        )
+        rabbit._cachedChannel.deleteExchange(exchangeName, {})
       ),
       ...createdQueues.map(queueName =>
-        Bluebird.fromCallback(cb =>
-          rabbit._cachedChannel.deleteQueue(queueName, {}, cb)
-        )
+        rabbit._cachedChannel.deleteQueue(queueName, {})
       ),
     ]).then(() => rabbit.destroy())
   );
@@ -42,22 +38,10 @@ describe('rabbitr#backoff', function() {
       testProp: 'backoff-example-data-' + queueName
     };
 
-    rabbit.subscribe(queueName)
-      .then(() => createdQueues.push(queueName))
-      .then(() =>
-        rabbit.bindExchangeToQueue(exchangeName, queueName)
-          .then(() =>
-            createdExchanges.push(exchangeName)
-          )
-          .then(() =>
-            rabbit.send(exchangeName, testData)
-          )
-      );
-
     let receivedIncrementer = 0;
     let lastReceivedUnixMS = null;
 
-    rabbit.on(queueName, function(message) {
+    rabbit.subscribe(queueName, {}, (message) => {
       receivedIncrementer++;
 
       // here we'll assert that the data is still the same
@@ -81,5 +65,10 @@ describe('rabbitr#backoff', function() {
         }, 100);
       }
     });
+    rabbit.bindExchangeToQueue(exchangeName, queueName);
+    createdQueues.push(queueName);
+    createdExchanges.push(exchangeName);
+
+    setTimeout(() => {rabbit.send(exchangeName, testData)}, 200);
   });
 });

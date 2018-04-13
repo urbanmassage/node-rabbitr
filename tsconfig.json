@@ -8,6 +8,7 @@
   "compileOnSave": true,
   "include": [
     "lib/**/*.ts",
+    "test/**/*.ts",
     "examples/**/*.ts",
     "index.ts"
   ],

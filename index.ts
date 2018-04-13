@@ -276,6 +276,10 @@ class Rabbitr {
       }
       catch(err) {
         // if we hit here, we should nack
+        if (!opts.skipBackoff) {
+          // super simple backoff achieved by just delaying performing a #nack
+          await fromCallback(cb => setTimeout(cb, BACKOFF_EXPIRY));
+        }
         channel.nack(msg);
       }
       finally {
@@ -389,6 +393,8 @@ class Rabbitr {
         // define a method that the #consume method will call
         const gotReply = async (msg) => {
           if (!msg) return;
+          this.log('got rpc reply', msg.content);
+
 
           // we got a reply, try and parse it
           try {
@@ -447,7 +453,7 @@ class Rabbitr {
         })
       );
 
-      return null;
+      return result;
     }
     catch(err) {
       // rethrow, this try catch only exists for the finally
