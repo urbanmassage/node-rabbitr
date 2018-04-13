@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 11.0.0
+- Major rewrite which changes a lot of interfaces
+- Removed support for callbacks
+- Made the options object required for a number of calls
+- Removed `bindExchangeToQueue`, instead you should pass a list of exchanges to the `subscribe` method as the first argument
+- Automatically adds a 2 second delay when you reject a message (unless `skipBackoff` passed in the `subscribe` options), adding a faux backoff mechanism
+
 ## 8.6.0
 - graceful shutdown now triggered by SIGINT or SIGTERM
 
