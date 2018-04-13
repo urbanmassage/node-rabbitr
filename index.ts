@@ -4,7 +4,7 @@ import {EventEmitter} from 'events';
 import * as amqplib from 'amqplib';
 import {v4} from 'node-uuid';
 import { fromCallback } from 'promise-cb';
-
+import { wait } from './lib/wait';
 import { racePromises } from './lib/promise-race';
 import {initWhitelist, shouldSkipSubscribe, log} from './lib/debug';
 import {stringify, stringifyError, parse, parseError} from './lib/serialization';
@@ -65,13 +65,11 @@ class Rabbitr {
     this.log(`${red('shutting down')}`);
     return this.postMessage();
   };
-  private postMessage(): Promise<void> | void {
+  private postMessage() {
     if (this.isShuttingDown) {
       if (this.pendingMessagesCount) {
         // wait
         this.log(`we have ${yellow(this.pendingMessagesCount + '')} pending messsges`);
-      } else {
-        // return this.destroy();
       }
     }
   }
@@ -95,8 +93,6 @@ class Rabbitr {
   private debugChannelsWhitelist: string[] | void;
 
   constructor(opts: Rabbitr.IOptions) {
-    // super();
-
     this.debugChannelsWhitelist = initWhitelist();
 
     this.opts = Object.assign({
@@ -176,7 +172,7 @@ class Rabbitr {
 
     // close all the channels that are open
     await Promise.all(this._openChannels.map(async (channel) => {
-      await channel.close.bind(channel);
+      await channel.close.call(channel);
       this.log('channel closed');
     }));
 
@@ -256,7 +252,7 @@ class Rabbitr {
         ++ this.pendingMessagesCount;
 
         // we create a new promise, and make the resolution an 'ack' and the rejection an 'nack'
-        await new Promise(async (ack: () => void, reject) => {
+        await new Promise((ack: () => void, reject) => {
           const message: Rabbitr.IMessage<TMessage> = {
             send: this.send.bind(this),
             rpcExec: this.rpcExec.bind(this),
@@ -278,7 +274,7 @@ class Rabbitr {
         // if we hit here, we should nack
         if (!opts.skipBackoff) {
           // super simple backoff achieved by just delaying performing a #nack
-          await fromCallback(cb => setTimeout(cb, BACKOFF_EXPIRY));
+          await wait(BACKOFF_EXPIRY);
         }
         channel.nack(msg);
       }
@@ -391,7 +387,7 @@ class Rabbitr {
       // define a promise that will start now, and collect the result that comes back on the response queue
       const resultPromise = new Promise(async (completed: (responseData: TOutput) => void, failed) => {
         // define a method that the #consume method will call
-        const gotReply = async (msg) => {
+        const gotReply = (msg) => {
           if (!msg) return;
           this.log('got rpc reply', msg.content);
 
@@ -443,15 +439,13 @@ class Rabbitr {
       });
 
       // race the result against a timeout promise
-      const result = await racePromises<TOutput>(
+      const result = await Promise.race<TOutput, any>([
         resultPromise,
-        fromCallback(cb => {
-          setTimeout(cb, timeoutMS);
-        }).then(() => {
+        wait(timeoutMS).then(() => {
           this.log(`request timeout firing for ${rpcQueue} to ${returnQueueName}`);
           throw new TimeoutError({isRpc: true, topic});
         })
-      );
+      ]);
 
       return result;
     }
@@ -505,8 +499,8 @@ class Rabbitr {
           catch(err) {
             this.log(`${yellow('rpcListener')} on topic ${cyan(topic)} ${red('hit error')}`, err);
 
-            var isError = err instanceof Error;
-            var errJSON = isError ?
+            const isError = err instanceof Error;
+            const errJSON = isError ?
               stringifyError(err) :
               stringify(err);
 
