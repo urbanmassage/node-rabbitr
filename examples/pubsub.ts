@@ -3,7 +3,7 @@ const rabbit = new Rabbitr({
   url: 'amqp://guest:guest@localhost'
 });
 
-rabbit.subscribe('example.queue', null, message => {
+rabbit.subscribe(['example.exchange'], 'example.queue', null, message => {
   console.log('Got message', message);
   console.log('Message data is', message.data);
 
@@ -13,7 +13,6 @@ rabbit.subscribe('example.queue', null, message => {
     process.exit(0);
   }, 100);
 });
-rabbit.bindExchangeToQueue('example.exchange', 'example.queue');
 
 rabbit.send('example.exchange', {
   thisIs: 'example-data',

@@ -1,7 +1,7 @@
 import Rabbitr = require('../');
-import {expect} from 'chai';
-import {v4} from 'node-uuid';
-import {fromCallback} from 'promise-cb';
+import { expect } from 'chai';
+import { v4 } from 'node-uuid';
+import { fromCallback } from 'promise-cb';
 
 describe('rabbitr#backoff', function() {
   let rabbit: Rabbitr;
@@ -41,7 +41,7 @@ describe('rabbitr#backoff', function() {
     let receivedIncrementer = 0;
     let lastReceivedUnixMS = null;
 
-    rabbit.subscribe(queueName, {}, (message) => {
+    rabbit.subscribe([exchangeName], queueName, {}, (message) => {
       receivedIncrementer++;
 
       // here we'll assert that the data is still the same
@@ -65,7 +65,6 @@ describe('rabbitr#backoff', function() {
         }, 100);
       }
     });
-    rabbit.bindExchangeToQueue(exchangeName, queueName);
     createdQueues.push(queueName);
     createdExchanges.push(exchangeName);
 

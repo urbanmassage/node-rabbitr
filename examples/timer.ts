@@ -3,7 +3,7 @@ const rabbit = new Rabbitr({
   url: 'amqp://guest:guest@localhost'
 });
 
-rabbit.subscribe('example.timer', null, (message) => {
+rabbit.subscribe(['example.timer'], 'example.timer', null, (message) => {
   console.log('Got delayed message', message);
   console.log('Delayed message data is', message.data);
 
@@ -13,7 +13,6 @@ rabbit.subscribe('example.timer', null, (message) => {
     process.exit(0);
   }, 100);
 });
-rabbit.bindExchangeToQueue('example.timer', 'example.timer');
 
 const DELAY_MS = 15000;
 

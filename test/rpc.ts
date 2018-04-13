@@ -1,7 +1,7 @@
 import Rabbitr = require('../');
-import {expect} from 'chai';
-import {v4} from 'node-uuid';
-import {fromCallback} from 'promise-cb';
+import { expect } from 'chai';
+import { v4 } from 'node-uuid';
+import { fromCallback } from 'promise-cb';
 
 describe('rabbitr#rpc', function() {
   let rabbit: Rabbitr;

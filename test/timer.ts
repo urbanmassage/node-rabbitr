@@ -1,7 +1,7 @@
 import Rabbitr = require('../');
-import {expect} from 'chai';
-import {v4} from 'node-uuid';
-import {fromCallback} from 'promise-cb';
+import { expect } from 'chai';
+import { v4 } from 'node-uuid';
+import { fromCallback } from 'promise-cb';
 
 const ACCEPTABLE_TIMER_THRESHOLD = 10;
 
@@ -33,7 +33,7 @@ describe('rabbitr#setTimer', function() {
       testProp: 'timed-example-data-' + queueName
     };
 
-    rabbit.subscribe(queueName, {}, (message) => {
+    rabbit.subscribe([queueName], queueName, {}, (message) => {
       message.ack();
 
       // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
@@ -44,13 +44,10 @@ describe('rabbitr#setTimer', function() {
     })
       .then(() => createdQueues.push(queueName))
       .then(() =>
-        rabbit.bindExchangeToQueue(queueName, queueName)
-          .then(() =>
-            createdExchanges.push(queueName)
-          )
-          .then(() =>
-            rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY)
-          )
+        createdExchanges.push(queueName)
+      )
+      .then(() =>
+        rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY)
       );
   });
 
@@ -65,17 +62,14 @@ describe('rabbitr#setTimer', function() {
 
     let receivedMessages = 0;
 
-    rabbit.subscribe(queueName, {}, (message) => {
+    rabbit.subscribe([queueName], queueName, {}, (message) => {
       message.ack();
 
       receivedMessages++;
     })
       .then(() => createdQueues.push(queueName))
       .then(() =>
-        rabbit.bindExchangeToQueue(queueName, queueName)
-          .then(() =>
-            createdExchanges.push(queueName)
-          )
+        createdExchanges.push(queueName)
       );
 
     // set the timer and schedule the clear

@@ -1,7 +1,7 @@
-import {expect} from 'chai';
+import { expect } from 'chai';
 import Rabbitr = require('../');
-import {v4} from 'node-uuid';
-import {fromCallback} from 'promise-cb';
+import { v4 } from 'node-uuid';
+import { fromCallback } from 'promise-cb';
 
 const timesAsync = (times: number, fn: (step: number) => PromiseLike<any>) => {
   let step = (n: number) => {
@@ -21,8 +21,7 @@ describe('rabbitr#destroy', () => {
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
 
-    rabbit.subscribe(queueName, {}, ({ack}) => ack());
-    rabbit.bindExchangeToQueue(exchangeName, queueName);
+    rabbit.subscribe([exchangeName], queueName, {}, ({ack}) => ack());
 
     await fromCallback(cb => setTimeout(cb, 200));
 

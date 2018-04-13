@@ -1,6 +1,6 @@
 import Rabbitr = require('../');
-import {expect} from 'chai';
-import {v4} from 'node-uuid';
+import { expect } from 'chai';
+import { v4 } from 'node-uuid';
 
 describe('rabbitr#pubsub', function() {
   let rabbit: Rabbitr;
@@ -27,14 +27,13 @@ describe('rabbitr#pubsub', function() {
       testProp: 'pubsub-example-data-' + queueName
     };
 
-    rabbit.subscribe(queueName, {}, (message) => {
+    rabbit.subscribe([exchangeName], queueName, {}, (message) => {
       message.ack();
 
       // here we'll assert that the data is the same- the fact we received it means the test has basically passed anyway
       expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
       done();
     })
-    .then(() => rabbit.bindExchangeToQueue(exchangeName, queueName))
     .then(() => {
       createdQueues.push(queueName);
       createdExchanges.push(exchangeName);
@@ -48,7 +47,7 @@ describe('rabbitr#pubsub', function() {
 
     const data = 'Hello world!';
 
-    rabbit.subscribe(queueName, {}, (message) => {
+    rabbit.subscribe([exchangeName], queueName, {}, (message) => {
       message.ack();
 
       expect(message.data).to.be.an.instanceOf(Buffer);
@@ -56,7 +55,6 @@ describe('rabbitr#pubsub', function() {
 
       done();
     })
-    .then(() => rabbit.bindExchangeToQueue(exchangeName, queueName))
     .then(() => {
       createdQueues.push(queueName);
       createdExchanges.push(exchangeName);

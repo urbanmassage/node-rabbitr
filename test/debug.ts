@@ -1,7 +1,7 @@
 import Rabbitr = require('../');
-import {expect} from 'chai';
-import {v4} from 'node-uuid';
-import {fromCallback} from 'promise-cb';
+import { expect } from 'chai';
+import { v4 } from 'node-uuid';
+import { fromCallback } from 'promise-cb';
 
 describe('debug', function() {
   afterEach(() => process.env.RABBITR_DEBUG = '');
@@ -65,11 +65,10 @@ describe('debug', function() {
 
     const data = {test: 15};
 
-    rabbit.subscribe(queueName, {}, (message) => {
+    rabbit.subscribe([queueName], queueName, {}, (message) => {
       expect(message.data).to.deep.equal(data);
       done();
     })
-    .then(() => rabbit.bindExchangeToQueue(queueName, queueName))
     .then(() => rabbit.send(queueName, data));
   });
 
@@ -82,10 +81,9 @@ describe('debug', function() {
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
 
-    rabbit.subscribe(queueName, {}, (message) => {
+    rabbit.subscribe([queueName], queueName, {}, (message) => {
       throw new Error(`Should not have received message on non-whitelisted queue`);
     })
-    .then(() => rabbit.bindExchangeToQueue(queueName, queueName))
     .then(() => rabbit.send(queueName, {}));
 
     setTimeout(done, 300);

@@ -18,18 +18,16 @@ var rabbit = new Rabbitr({
 
 ```js
 // in one module
-rabbit.subscribe('sms.send.booking.create', {}, (message) => {
+rabbit.subscribe(['booking.create'], 'sms.send.booking.create', {}, (message) => {
 	// send an sms
 	message.ack();
 });
-rabbit.bindExchangeToQueue('booking.create', 'sms.send.booking.create');
 
 // in another module
-rabbit.subscribe('email.send.booking.create', {}, (message) => {
+rabbit.subscribe(['booking.create'], 'email.send.booking.create', {}, (message) => {
 	// send an email
 	message.ack();
 });
-rabbit.bindExchangeToQueue('booking.create', 'email.send.booking.create');
 
 // elsewhere
 rabbit.send('booking.create', {id: 1});
@@ -40,7 +38,7 @@ Rabbitr makes using dead letter exchanges dead easy
 
 ```js
 // set timer
-rabbit.subscribe('booking.not-confirmed.timer.set', {}, (message) => {
+rabbit.subscribe(['booking.create'], 'booking.not-confirmed.timer.set', {}, (message) => {
   // do something to calculate how long we want the timer to last
 	var timeFromNow = 900000; // 15 mins
 
@@ -50,23 +48,20 @@ rabbit.subscribe('booking.not-confirmed.timer.set', {}, (message) => {
 
 	message.ack();
 });
-rabbit.bindExchangeToQueue('booking.create', 'booking.not-confirmed.timer.set');
 
 // clear timer if something has happened that means the timer action isn't required
-rabbit.subscribe('booking.not-confirmed.timer.clear', {}, (message) => {
+rabbit.subscribe(['booking.confirm'], 'booking.not-confirmed.timer.clear', {}, (message) => {
 	rabbit.clearTimer('booking.not-confirmed.timer.fire', message.data.id);
 
 	message.ack();
 });
-rabbit.bindExchangeToQueue('booking.confirm', 'booking.not-confirmed.timer.clear');
 
 // handle the timer firing
-rabbit.subscribe('booking.not-confirmed.timer.fire', {}, (message) => {
+rabbit.subscribe(['booking.not-confirmed.timer.fire'], 'booking.not-confirmed.timer.fire', {}, (message) => {
 	// do something off the back of the timer firing
 	// in this example, message.data.id is the booking id that wasn't confirmed in time
 	message.ack();
 });
-rabbit.bindExchangeToQueue('booking.not-confirmed.timer.fire', 'booking.not-confirmed.timer.fire');
 ```
 
 ## RPC (remote procedure call)

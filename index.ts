@@ -1,13 +1,12 @@
-import {cyan, red, yellow} from 'chalk';
-import {EventEmitter} from 'events';
+import { cyan, red, yellow } from 'chalk';
+import { EventEmitter } from 'events';
 
 import * as amqplib from 'amqplib';
-import {v4} from 'node-uuid';
+import { v4 } from 'node-uuid';
 import { fromCallback } from 'promise-cb';
 import { wait } from './lib/wait';
-import { racePromises } from './lib/promise-race';
-import {initWhitelist, shouldSkipSubscribe, log} from './lib/debug';
-import {stringify, stringifyError, parse, parseError} from './lib/serialization';
+import { initWhitelist, shouldSkipSubscribe, log } from './lib/debug';
+import { stringify, stringifyError, parse, parseError } from './lib/serialization';
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 const BACKOFF_EXPIRY = 2000; // we use a fixed backoff expiry for now of 2 seconds
@@ -205,18 +204,21 @@ class Rabbitr {
     }
   }
 
-  async subscribe(topic: string, opts: Rabbitr.ISubscribeOptions, executorFunc: (data: Rabbitr.IMessage<any>) => void): Promise<amqplib.Channel>;
-  async subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, executorFunc: (data: Rabbitr.IMessage<TMessage>) => void): Promise<amqplib.Channel>;
-  async subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, executorFunc: (data: Rabbitr.IMessage<TMessage>) => void): Promise<amqplib.Channel> {
+  async subscribe(exchangeNames: string[], queueName: string, opts: Rabbitr.ISubscribeOptions, executorFunc: (data: Rabbitr.IMessage<any>) => void): Promise<amqplib.Channel>;
+  async subscribe<TMessage>(exchangeNames: string[], queueName: string, opts: Rabbitr.ISubscribeOptions, executorFunc: (data: Rabbitr.IMessage<TMessage>) => void): Promise<amqplib.Channel>;
+  async subscribe<TMessage>(exchangeNames: string[], queueName: string, opts: Rabbitr.ISubscribeOptions, executorFunc: (data: Rabbitr.IMessage<TMessage>) => void): Promise<amqplib.Channel> {
     await this.connectionPromise;
 
-    this.log(cyan('subscribe'), topic, opts);
+    this.log(cyan('subscribe'), exchangeNames, queueName, opts);
+
+    // here we bind all the exchanges into the queues
+    await Promise.all(exchangeNames.map((exchangeName) => this._bindExchangeToQueue(exchangeName, queueName)));
 
     if (
-      shouldSkipSubscribe(this.debugChannelsWhitelist, topic)
+      shouldSkipSubscribe(this.debugChannelsWhitelist, queueName)
     ) {
-      // this topic should be skipped as it's not in the 'debug whitelist'
-      this.log(red('skipped'), cyan('subscribe'), topic);
+      // this queueName should be skipped as it's not in the 'debug whitelist'
+      this.log(red('skipped'), cyan('subscribe'), queueName);
       return;
     }
 
@@ -225,7 +227,7 @@ class Rabbitr {
     this._openChannels.push(channel);
 
     // ensure the queue we want to listen on actually exists
-    await channel.assertQueue(this._formatName(topic), Object.assign({
+    await channel.assertQueue(this._formatName(queueName), Object.assign({
       durable: true,
     }, opts));
 
@@ -236,7 +238,7 @@ class Rabbitr {
     const processMessage = async (msg: any) => {
       if (!msg) return;
       if (this.isShuttingDown) {
-        this.log(`${red('rejected')} message on topic ${yellow(topic)} because we're shutting down`);
+        this.log(`${red('rejected')} message on queueName ${yellow(queueName)} because we're shutting down`);
         channel.nack(msg);
         return;
       }
@@ -246,7 +248,7 @@ class Rabbitr {
         data = parse(data);
       }
 
-      this.log(`got a new message on ${cyan(topic)}`, data);
+      this.log(`got a new message on ${cyan(queueName)}`, data);
 
       try {
         ++ this.pendingMessagesCount;
@@ -256,7 +258,7 @@ class Rabbitr {
           const message: Rabbitr.IMessage<TMessage> = {
             send: this.send.bind(this),
             rpcExec: this.rpcExec.bind(this),
-            topic,
+            topic: queueName,
             data,
             channel,
             ack,
@@ -285,11 +287,11 @@ class Rabbitr {
     };
 
     // start consuming, and return the channel we opened for this subscription
-    await channel.consume(this._formatName(topic), processMessage, {});
+    await channel.consume(this._formatName(queueName), processMessage, {});
     return channel;
   }
 
-  async bindExchangeToQueue(exchange: string, queue: string): Promise<void> {
+  private async _bindExchangeToQueue(exchange: string, queue: string): Promise<void> {
     await this.connectionPromise;
     this.log(cyan('bindExchangeToQueue'), exchange, queue);
 
@@ -469,6 +471,7 @@ class Rabbitr {
     this.log(`has rpcListener for ${topic}`);
 
     await this.subscribe(
+      [],
       rpcQueueName,
       Object.assign({}, opts, {
         skipBackoff: true,
