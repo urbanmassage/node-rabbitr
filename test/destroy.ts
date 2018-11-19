@@ -47,7 +47,7 @@ describe('rabbitr#destroy', () => {
   let ifGcIt = global.gc && parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) >= 5 ? it : it.skip;
 
   ifGcIt('doesn\'t leak', function(done) {
-    this.timeout(10000);
+    this.timeout(20000);
 
     async function runCycle() {
       const rabbit = new Rabbitr({
