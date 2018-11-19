@@ -457,7 +457,9 @@ class Rabbitr {
     }
     finally {
       // clean up our temp queue now we're done
-      channel.deleteQueue(replyQueue, {});
+      channel.deleteQueue(replyQueue, {}).catch((err) => {
+        this.log(`failed to remove temp queue ${replyQueue} due to error `, err);
+      });
     }
   }
 
