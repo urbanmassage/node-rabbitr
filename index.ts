@@ -379,6 +379,8 @@ class Rabbitr {
     const channel = this._rpcReturnChannel;
     const replyQueue = this._formatName(returnQueueName);
 
+    let replyConsumerTag: string = null;
+
     try {
       // bind the response queue
       await this._createTempQueue(replyQueue, channel);
@@ -420,7 +422,9 @@ class Rabbitr {
           }
         };
 
-        channel.consume(replyQueue, gotReply, {noAck: true}).catch((err) => {
+        channel.consume(replyQueue, gotReply, {noAck: true}).then((response) => {
+          replyConsumerTag = response.consumerTag;
+        }).catch((err) => {
           failed(err);
         });
       });
@@ -457,6 +461,12 @@ class Rabbitr {
       channel.deleteQueue(replyQueue, {}).catch((err) => {
         this.log(`failed to remove temp queue ${replyQueue} due to error `, err);
       });
+
+      if (replyConsumerTag) {
+        channel.cancel(replyConsumerTag).catch((err) => {
+          this.log(`failed to cancel replyConsumerTag ${replyConsumerTag} due to error `, err);
+        });
+      }
     }
   }
 
