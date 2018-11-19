@@ -5,9 +5,8 @@
   "main": "index",
   "scripts": {
     "build": "tsc",
-    "test": "DEBUG=rabbit* mocha -gc",
-    "coverage": "nyc --reporter=lcov --reporter=text mocha",
-    "sendcoverage": "if [ -f coverage/lcov.info ]; then cat ./coverage/lcov.info | ./node_modules/codecov.io/bin/codecov.io.js; fi",
+    "test": "DEBUG=rabbit* mocha -gc --exit",
+    "coverage": "nyc --reporter=lcov --reporter=text mocha --exit",
     "preversion": "npm run test -- --bail",
     "postversion": "git push --follow-tags"
   },
@@ -31,8 +30,7 @@
   },
   "devDependencies": {
     "chai": "^3.5.0",
-    "codecov.io": "^0.1.6",
-    "mocha": "^2.5.3",
+    "mocha": "^5.2.0",
     "nyc": "^7.1.0",
     "source-map-support": "^0.4.15",
     "typescript": "^2.6.2"
