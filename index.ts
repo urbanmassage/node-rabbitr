@@ -1,23 +1,23 @@
-import {cyan, red, yellow} from 'chalk';
-import {EventEmitter} from 'events';
+import { cyan, red, yellow } from 'chalk';
+import { EventEmitter } from 'events';
 
-import amqplib = require('amqplib/callback_api');
-import objectAssign = require('object-assign');
-import {v4} from 'node-uuid';
-import Bluebird = require('bluebird');
-
-import {initWhitelist, shouldSkipSubscribe, log} from './lib/debug';
-import {stringify, stringifyError, parse, parseError} from './lib/serialization';
+import * as amqplib from 'amqplib';
+import { v4 } from 'node-uuid';
+import { fromCallback } from 'promise-cb';
+import { wait } from './lib/wait';
+import { initWhitelist, shouldSkipSubscribe, log } from './lib/debug';
+import { stringify, stringifyError, parse, parseError } from './lib/serialization';
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
+const BACKOFF_EXPIRY = 2000; // we use a fixed backoff expiry for now of 2 seconds
 
-function maybeFromCallback<T>(fn: ((done: Rabbitr.Callback<T>) => void) | (() => PromiseLike<T>)): Bluebird<T> {
+function maybeFromCallback<T>(fn: ((done: Rabbitr.Callback<T>) => void) | (() => PromiseLike<T>)): Promise<T> {
   let callback: Rabbitr.Callback<T>;
-  let promise = Bluebird.fromCallback<T>(_callback => (callback = _callback) && void 0);
+  let promise = fromCallback<T>(_callback => (callback = _callback) && void 0);
 
   let val = (fn as Function)(callback);
   if (val && val.then) {
-    return Bluebird.resolve(val);
+    return Promise.resolve<T>(val);
   }
   return promise;
 }
@@ -35,21 +35,7 @@ class TimeoutError extends Error {
   }
 }
 
-/**
- * This is a helper class used to detect when a middleware wants to send a response to an RPC message.
- * The way we do this with promises is by throwing an instance of this class and the catching it.
- */
-class MiddlewareResponse extends Error {
-  response: any;
-  constructor(response) {
-    super();
-    this.response = response;
-  }
-}
-
-let HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = false;
-
-class Rabbitr extends EventEmitter {
+class Rabbitr {
   opts: Rabbitr.IOptions;
 
   /** @deprecated */
@@ -57,11 +43,45 @@ class Rabbitr extends EventEmitter {
   /** @deprecated */
   protected connected = false;
 
-  middleware = new Array<Rabbitr.Middleware>();
-
   protected connection: amqplib.Connection;
 
   protected log = log;
+
+  private _openChannels: amqplib.Channel[];
+
+  private _timerChannel: amqplib.Channel;
+  private _backoffChannel: amqplib.Channel;
+  private _publishChannel: amqplib.Channel;
+  private _rpcReturnChannel: amqplib.Channel;
+  _cachedChannel: amqplib.Channel;
+
+  private connectionPromise: Promise<amqplib.Connection>;
+
+  private isShuttingDown: boolean = false;
+  private pendingMessagesCount: number = 0;
+  private shutdown = () => {
+    this.isShuttingDown = true;
+    this.log(`${red('shutting down')}`);
+    return this.postMessage();
+  };
+  private postMessage() {
+    if (this.isShuttingDown) {
+      if (this.pendingMessagesCount) {
+        // wait
+        this.log(`we have ${yellow(this.pendingMessagesCount + '')} pending messsges`);
+      }
+    }
+  }
+  private _formatName(name: string): string {
+    // TODO - rename this ???
+
+    // istanbul ignore next
+    if (this.opts.queuePrefix) {
+      name = `${this.opts.queuePrefix}.${name}`;
+    }
+
+    return name;
+  }
 
   /**
    * An array of channel names used for debug mode. If this value is set, calls to
@@ -72,23 +92,14 @@ class Rabbitr extends EventEmitter {
   private debugChannelsWhitelist: string[] | void;
 
   constructor(opts: Rabbitr.IOptions) {
-    super();
-
-    if (!HAS_WARNED_ABOUT_V8_BREAKING_CHANGE) {
-      console.warn('Rabbitr has a major breaking change in version 8 - rpcListener queues are no longer durable. You will need to remove all rpcListener queues from RabbitMQ during deployment.')
-      HAS_WARNED_ABOUT_V8_BREAKING_CHANGE = true;
-    }
-
     this.debugChannelsWhitelist = initWhitelist();
 
-    this.opts = objectAssign(<Rabbitr.IOptions>{
+    this.opts = Object.assign({
       url: '',
       queuePrefix: '',
-      ackWarningTimeout: 5000,
-      autoAckOnTimeout: null,
       defaultRPCExpiry: DEFAULT_RPC_EXPIRY,
     }, opts);
-    this.opts.connectionOpts = objectAssign({
+    this.opts.connectionOpts = Object.assign({
       heartbeat: 1
     }, opts && opts.connectionOpts || {});
 
@@ -103,506 +114,288 @@ class Rabbitr extends EventEmitter {
 
     this._openChannels = [];
 
-    this._connect();
-  }
-
-  private _openChannels: amqplib.Channel[];
-
-  private _timerChannel: amqplib.Channel;
-  private _publishChannel: amqplib.Channel;
-  private _rpcReturnChannel: amqplib.Channel;
-  _cachedChannel: amqplib.Channel;
-
-  private connectionPromise: Bluebird<amqplib.Connection>;
-
-  private isShuttingDown: boolean = false;
-  private pendingMessagesCount: number = 0;
-  private shutdown = () => {
-    this.isShuttingDown = true;
-    this.log(`${red('shutting down')}`);
-    return this.postMessage();
-  };
-
-  private postMessage(): Bluebird<void> | void {
-    if (this.isShuttingDown) {
-      if (this.pendingMessagesCount) {
-        // wait
-        this.log(`we have ${yellow(this.pendingMessagesCount + '')} pending messsges`);
-      } else {
-        return this.destroy();
-      }
-    }
-  }
-
-  private _connect() {
+    // begin to initiate the connection now
     this.log('#connect');
-
     this.log(`using connection url ${yellow(this.opts.url)}`);
+    this.connectionPromise = this.initiateConnection();
+  }
 
-    this.connectionPromise = Bluebird.fromCallback<amqplib.Connection>(callback =>
-      amqplib.connect(this.opts.url, this.opts.connectionOpts, callback)
-    ).then(conn => {
-      // make sure to close the connection if the process terminates
-      process.once('SIGINT', this.shutdown);
+  private async initiateConnection(): Promise<amqplib.Connection> {
+    // start by opening an AMQP connection
+    this.connection = await amqplib.connect(this.opts.url, this.opts.connectionOpts);
 
-      conn.on('close', () => {
-        process.removeListener('SIGINT', this.shutdown);
-        if (!this.isShuttingDown) {
-          throw new Error('Disconnected from RabbitMQ');
-        }
-        this.log(`connection closed`);
-      });
-
-      return Bluebird.fromCallback<amqplib.Channel>(callback =>
-        conn.createChannel(callback)
-      ).then(channel => {
-        this._timerChannel = channel;
-        this._publishChannel = channel;
-        this._cachedChannel = channel;
-
-        this._openChannels.push(channel);
-
-        return Bluebird.fromCallback<amqplib.Channel>(callback =>
-          conn.createChannel(callback)
-        ).then(channel => {
-          this._rpcReturnChannel = channel;
-
-          this._openChannels.push(channel);
-
-          // cache the connection and do all the setup work
-          this.connection = conn;
-          this.connected = true;
-
-          this.log('ready');
-          return maybeFromCallback<void>(this.opts.setup || (() => Bluebird.resolve()))
-            .then(() => {
-              this.ready = true;
-              return conn;
-            });
-        });
-      });
-    }).catch(function(error) {
-      // istanbul ignore next
-      process.nextTick(() => { throw error; });
+    // make sure to close the connection if the process terminates
+    process.once('SIGINT', this.shutdown);
+    process.once('SIGTERM', this.shutdown);
+    this.connection.on('close', () => {
+      process.removeListener('SIGINT', this.shutdown);
+      process.removeListener('SIGTERM', this.shutdown);
+      if (!this.isShuttingDown) {
+        throw new Error('Disconnected from RabbitMQ');
+      }
+      this.log(`connection closed`);
     });
+
+    // now setup all the channels necessary for standard operation
+    const channels = await Promise.all([
+      this.connection.createChannel(),
+      this.connection.createChannel(),
+    ]);
+    this._timerChannel = channels[0];
+    this._publishChannel = channels[0];
+    this._backoffChannel = channels[0];
+    this._cachedChannel = channels[0];
+    this._rpcReturnChannel = channels[1];
+    this._openChannels = this._openChannels.concat(channels);
+
+    // mark the connection as open and perform any 'setup' method if one is set
+    this.connected = true;
+    await maybeFromCallback<void>(this.opts.setup || (() => Promise.resolve()));
+
+    // mark this instance as 'ready' and end the promise
+    this.ready = true;
+    return this.connection;
   }
 
-  // istanbul ignore next
-  public whenReady(callback?: () => void): Bluebird<void> {
-    return this.connectionPromise.then<void>(() => void 0).asCallback(callback);
-  }
-
-  private _formatName(name: string): string {
-    // istanbul ignore next
-    if (this.opts.queuePrefix) {
-      name = this.opts.queuePrefix + '.' + name;
-    }
-
-    return name;
-  }
-
-  private destroyPromise: Bluebird<void>;
   /** method to destroy anything for this instance of rabbitr */
-  destroy(cb?: Rabbitr.ErrorCallback): Bluebird<void> {
-    if (!this.destroyPromise) {
-      this.log(`${red('destroying')}`);
-      this.destroyPromise = Bluebird.each(this._openChannels, channel =>
-        Bluebird.fromCallback(channel.close.bind(channel))
-          .then(
-            () => this.log('channel closed'),
-            err => {
-              // istanbul ignore next
-              this.log('Error while closing connection', err);
-              throw err;
-            }
-          )
-      ).then(() => {
-        return Bluebird.fromCallback(callback =>
-          this.connection.close(callback)
-        ).then(
-          () => {
-            this.log('connection closed');
-            this.removeAllListeners();
-            this.connectionPromise = null;
-          },
-          err => {
-            // istanbul ignore next
-            this.log('Error while closing connection', err);
-            throw err;
-          }
-        );
-      });
+  async destroy() {
+    if(!this.connected) {
+      this.log(`${red('unable to destroy this instance as it is not connected')}`);
+      return;
     }
-    return this.destroyPromise.asCallback(cb);
+
+    // mark this instance as no longer valid
+    this.log(`${red('destroying')}`);
+    this.ready = false;
+    this.connected = false;
+
+    // close all the channels that are open
+    await Promise.all(this._openChannels.map(async (channel) => {
+      await channel.close.call(channel);
+      this.log('channel closed');
+    }));
+
+    // close the connection
+    await this.connection.close();
+    this.log('connection closed');
+    this.connectionPromise = null;
+    this.connection = null;
   }
 
   // standard pub/sub stuff
 
-  send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
-  send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+  async send(topic: string, data: any, opts?: Rabbitr.ISendOptions): Promise<void>;
+  async send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Promise<void>;
 
-  send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void> {
-    // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled()) {
-      // delay until ready
-      return this.whenReady().then(() =>
-        this.send(topic, data, cb, opts)
-      );
-    }
-
+  async send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Promise<void> {
+    await this.connectionPromise;
     this.log(yellow('send'), topic, data, opts);
 
-    return Bluebird.fromCallback(callback =>
-      this._publishChannel.assertExchange(this._formatName(topic), 'topic', {}, callback)
-    ).then(() => {
-      this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
-        contentType: 'application/json',
-      });
-    }).asCallback(cb);
+    // first ensure the exchange exists
+    await this._publishChannel.assertExchange(this._formatName(topic), 'topic', {});
+
+    // then publish the message
+    const isSuccess = this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
+      contentType: 'application/json',
+    });
+
+    if(!isSuccess) {
+      throw new Error(`Failed to publish to topic ${topic} with data ${data}`);
+    }
   }
 
-  on(topic: string, cb: (data: Rabbitr.IMessage<any>) => void): this;
-  on<TData>(topic: string, cb: (data: Rabbitr.IMessage<TData>) => void): this;
+  async subscribe(exchangeNames: string[], queueName: string, opts: Rabbitr.ISubscribeOptions, executorFunc: (data: Rabbitr.IMessage<any>) => void): Promise<amqplib.Channel>;
+  async subscribe<TMessage>(exchangeNames: string[], queueName: string, opts: Rabbitr.ISubscribeOptions, executorFunc: (data: Rabbitr.IMessage<TMessage>) => void): Promise<amqplib.Channel>;
+  async subscribe<TMessage>(exchangeNames: string[], queueName: string, opts: Rabbitr.ISubscribeOptions, executorFunc: (data: Rabbitr.IMessage<TMessage>) => void): Promise<amqplib.Channel> {
+    await this.connectionPromise;
 
-  /** @private */
-  on(topic: string, cb: (data: Rabbitr.IEnvelopedMessage<any>) => void): this;
+    this.log(cyan('subscribe'), exchangeNames, queueName, opts);
 
-  subscribe(topic: string, cb?: Rabbitr.Callback<any>): Bluebird<void>;
-  subscribe(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<any>): Bluebird<void>;
-  subscribe<TMessage>(topic: string, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
-  subscribe<TMessage>(topic: string, opts: Rabbitr.ISubscribeOptions, cb?: Rabbitr.Callback<TMessage>): Bluebird<void>;
-
-  subscribe<TMessage>(topic: string, opts?: Rabbitr.ISubscribeOptions, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
-    // istanbul ignore next
-    if (typeof opts === 'function') {
-      cb = <any>opts;
-      opts = null;
-    }
-
-    // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled()) {
-      // delay until ready
-      return this.whenReady().then(() =>
-        this.subscribe(topic, opts, cb)
-      );
-    }
-
-    const options: Rabbitr.ISubscribeOptions = opts;
-
-    this.log(cyan('subscribe'), topic, options);
+    // here we bind all the exchanges into the queues
+    await Promise.all(exchangeNames.map((exchangeName) => this._bindExchangeToQueue(exchangeName, queueName)));
 
     if (
-      shouldSkipSubscribe(this.debugChannelsWhitelist, topic)
+      shouldSkipSubscribe(this.debugChannelsWhitelist, queueName)
     ) {
-      this.log(red('skipped'), cyan('subscribe'), topic);
-      return Bluebird.resolve();
+      // this queueName should be skipped as it's not in the 'debug whitelist'
+      this.log(red('skipped'), cyan('subscribe'), queueName);
+      return;
     }
 
-    return Bluebird.fromCallback<amqplib.Channel>(callback =>
-      this.connection.createChannel(callback)
-    ).catch(error => {
-      // istanbul ignore next
-      this.emit('error', error);
-      throw error;
-    }).then(channel => {
-      this._openChannels.push(channel);
+    // first, open a unique connection for this subscription
+    const channel = await this.connection.createChannel();
+    this._openChannels.push(channel);
 
-      return Bluebird.fromCallback(callback =>
-        channel.assertQueue(this._formatName(topic), objectAssign({
-          durable: true,
-        }, options), callback)
-      ).then(ok => {
-        channel.prefetch(options ? options.prefetch || 1 : 1);
+    // ensure the queue we want to listen on actually exists
+    await channel.assertQueue(this._formatName(queueName), Object.assign({
+      durable: true,
+    }, opts));
 
-        const processMessage = (msg: any) => {
-          if (!msg) return;
-          if (this.isShuttingDown) {
-            this.log(`${red('rejected')} message on topic ${yellow(topic)} because we're shutting down`);
-            channel.nack(msg);
-            return;
-          }
+    // set the concurrency on the channel
+    channel.prefetch(opts && opts.prefetch || 1);
 
-          var data = msg.content.toString();
-          if (msg.properties.contentType === 'application/json') {
-            data = parse(data);
-          }
+    // define the internal message processing handler
+    const processMessage = async (msg: any) => {
+      if (!msg) return;
+      if (this.isShuttingDown) {
+        this.log(`${red('rejected')} message on queueName ${yellow(queueName)} because we're shutting down`);
+        channel.nack(msg);
+        return;
+      }
 
-          this.log(`got a new message on ${cyan(topic)}`, data);
+      let data = msg.content.toString();
+      if (msg.properties.contentType === 'application/json') {
+        data = parse(data);
+      }
 
-          const messageAcknowledgement = new Bluebird((ack: () => void, reject) => {
-            const message: Rabbitr.IMessage<TMessage> = {
-              send: this.send.bind(this),
-              rpcExec: this.rpcExec.bind(this),
-              topic,
-              data,
-              channel,
-              ack,
-              reject,
-            };
+      this.log(`got a new message on ${cyan(queueName)}`, data);
 
-            if (options && options.skipMiddleware) {
-              this.emit(topic, message);
-              return null;
-            }
+      try {
+        ++ this.pendingMessagesCount;
 
-            this._runMiddleware(message).then(() => {
-              // TODO - how to handle common error function thing for middleware?
-              this.emit(topic, message);
-              return null;
-            });
-          }).then(
-            // acknowledged
-            () => {
-              this.log(`acknowledging message ${cyan(topic)}`, data);
-              channel.ack(msg);
-            },
-            // rejected
-            error => {
-              this.log(`rejecting message ${cyan(topic)}`, data, error);
-              console.error(error && error.stack || error);
-              channel.nack(msg);
-            }
-          );
+        // we create a new promise, and make the resolution an 'ack' and the rejection an 'nack'
+        await new Promise((ack: () => void, reject) => {
+          const message: Rabbitr.IMessage<TMessage> = {
+            send: this.send.bind(this),
+            rpcExec: this.rpcExec.bind(this),
+            topic: queueName,
+            data,
+            channel,
+            ack,
+            reject,
+            properties: msg.properties,
+          };
 
-          ++ this.pendingMessagesCount;
-
-          // Add a timeout
-          return Bluebird.race([
-            messageAcknowledgement,
-            Bluebird
-              .delay(this.opts.ackWarningTimeout)
-              .then(() => {
-                throw new TimeoutError({isRpc: false, topic});
-              }),
-          ]).catch(TimeoutError, error => {
-            this.emit('warning', {
-              type: 'ack.timeout',
-              queue: topic,
-              message: data,
-            });
-
-            if (this.opts.autoAckOnTimeout === 'acknowledge') {
-              channel.ack(msg);
-            } else if (this.opts.autoAckOnTimeout === 'reject') {
-              channel.nack(msg);
-            }
-            return null;
-          }).then(() => {
-            -- this.pendingMessagesCount;
-            this.postMessage();
-          });
-        };
-
-        return Bluebird.fromCallback(callback =>
-          channel.consume(this._formatName(topic), processMessage, {}, callback)
-        ).catch(error => {
-          // istanbul ignore next
-          this.emit('error', error);
-          throw error;
+          executorFunc(message);
         });
-      }).asCallback(cb);
-    });
+
+        // if we hit here, we should ack
+        channel.ack(msg);
+      }
+      catch(err) {
+        // if we hit here, we should nack
+        if (!opts.skipBackoff) {
+          // super simple backoff achieved by just delaying performing a #nack
+          await wait(BACKOFF_EXPIRY);
+        }
+        channel.nack(msg);
+      }
+      finally {
+        -- this.pendingMessagesCount;
+        this.postMessage();
+      }
+    };
+
+    // start consuming, and return the channel we opened for this subscription
+    await channel.consume(this._formatName(queueName), processMessage, {});
+    return channel;
   }
 
-  bindExchangeToQueue(exchange: string, queue: string, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
-    // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled()) {
-      // delay until ready
-      return this.whenReady().then(() =>
-        this.bindExchangeToQueue(exchange, queue, cb)
-      );
-    }
-
+  private async _bindExchangeToQueue(exchange: string, queue: string): Promise<void> {
+    await this.connectionPromise;
     this.log(cyan('bindExchangeToQueue'), exchange, queue);
 
-    return Bluebird.fromCallback<amqplib.Channel>(callback =>
-      this.connection.createChannel(callback)
-    ).catch(error => {
-      // istanbul ignore next
-      this.emit('error', error);
-      throw error;
-    }).then(channel => {
-      channel.assertQueue(this._formatName(queue));
-      channel.assertExchange(this._formatName(exchange), 'topic');
+    const channel = await this.connection.createChannel();
 
-      return Bluebird.fromCallback(callback =>
-        channel.bindQueue(this._formatName(queue), this._formatName(exchange), '*', {}, callback)
-      ).catch(error => {
-        // istanbul ignore next
-        this.emit('error', error);
-        throw error;
-      }).then(ok => {
-        return Bluebird.fromCallback(callback => channel.close(callback));
-      });
-    }).asCallback(cb);
-  };
+    try {
+      // make sure the queue and exchange exist
+      await channel.assertQueue(this._formatName(queue), null);
+      await channel.assertExchange(this._formatName(exchange), 'topic', null);
+
+      // finally bind the queue + exchange together
+      await channel.bindQueue(this._formatName(queue), this._formatName(exchange), '*', {});
+    }
+    catch(err) {
+      // simply rethrow, try catch is just for finally
+      throw err;
+    }
+    finally {
+      // make sure to close the channel we opened
+      await channel.close();
+    }
+  }
 
   // timed queue stuff
   private _timerQueueName(topic: string, uniqueID: string): string {
     return `dlq.${topic}.${uniqueID}`;
   }
 
-  setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
-    // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled()) {
-      // delay until ready
-      return this.whenReady().then(() =>
-        this.setTimer(topic, uniqueID, data, ttl, cb)
-      );
-    }
-
-    var timerQueue = this._timerQueueName(topic, uniqueID);
-
+  async setTimer<TData>(topic: string, uniqueID: string, data: TData, ttl: number): Promise<void> {
+    await this.connectionPromise;
     this.log(yellow('setTimer'), topic, uniqueID, data);
 
-    return Bluebird.fromCallback(callback =>
-      this._timerChannel.assertQueue(this._formatName(timerQueue), {
-        durable: true,
-        deadLetterExchange: this._formatName(topic),
-        arguments: {
-          'x-dead-letter-routing-key': '*',
-        },
-        expires: (ttl + 1000)
-      }, callback)
-    ).catch(error => {
-      // istanbul ignore next
-      this.emit('error', error);
-      throw error;
-    }).then(() => {
-      this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
-        contentType: 'application/json',
-        // TODO - should we do anything with this?
-        expiration: `${ttl}`,
-      });
-    }).asCallback(cb);
-  }
+    // format the queue name
+    const timerQueue = this._timerQueueName(topic, uniqueID);
 
-  clearTimer(topic: string, uniqueID: string, cb?: Rabbitr.ErrorCallback): Bluebird<void> {
-    // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled()) {
-      // delay until ready
-      return this.whenReady().then(() =>
-        this.clearTimer(topic, uniqueID, cb)
-      );
-    }
+    // create the timer queue if it doesn't already exist
+    await this._timerChannel.assertQueue(this._formatName(timerQueue), {
+      durable: true,
+      deadLetterExchange: this._formatName(topic),
+      arguments: {
+        'x-dead-letter-routing-key': '*',
+      },
+      expires: (ttl + 1000),
+    });
 
-    var timerQueue = this._timerQueueName(topic, uniqueID);
-
-    this.log(yellow('clearTimer'), timerQueue);
-
-    return Bluebird.fromCallback(callback =>
-      this._timerChannel.deleteQueue(timerQueue, {}, callback)
-    ).asCallback(cb);
-  }
-
-  // rpc stuff
-  private _rpcQueueName(topic: string): string {
-    return `rpc.${topic}`;
-  }
-
-  private _getTempQueue(queueName: string, channel: amqplib.Channel) {
-    this.log(`creating temp queue ${cyan(queueName)}`)
-    return Bluebird.fromCallback<amqplib.Replies.AssertQueue>(callback =>
-      channel.assertQueue(queueName, {
-        exclusive: true,
-        expires: (this.opts.defaultRPCExpiry * 1 + 1000),
-        durable: false,
-      }, callback)
-    ).disposer(() => {
-      this.log(`deleting temp queue ${cyan(queueName)}`);
-      return Bluebird.fromCallback<any>(callback =>
-        // delete the return queue and close exc channel
-        channel.deleteQueue(queueName, {}, callback)
-      ).catch(error => {
-        // istanbul ignore next
-        console.log(`rabbitr temp queue '${cyan(queueName)}' cleanup exception`, error && error.stack || error);
-        throw error;
-      }).then(() => {
-        this.log(`deleted temp queue ${cyan(queueName)}`);
-      });
+    // now send the message direct into the timer
+    this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
+      contentType: 'application/json',
+      expiration: `${ttl}`,
     });
   }
 
-  rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Bluebird<any>;
-  rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): Bluebird<any>;
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
+  async clearTimer(topic: string, uniqueID: string): Promise<void> {
+    await this.connectionPromise;
+    const timerQueue = this._timerQueueName(topic, uniqueID);
+    this.log(yellow('clearTimer'), timerQueue);
 
-  rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput> {
-    // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled()) {
-      // delay until ready
-      return this.whenReady().then(() =>
-        this.rpcExec<TInput, TOutput>(topic, data, opts, cb)
-      );
-    }
+    await this._timerChannel.deleteQueue(timerQueue, {});
+  }
 
-    // istanbul ignore next
-    if ('function' === typeof opts) {
-      // shift arguments
-      cb = <Rabbitr.Callback<TOutput>>opts;
-      opts = null;
-    }
+  // rpc helper methods
+  private _rpcQueueName(topic: string): string {
+    return `rpc.${topic}`;
+  }
+  private async _createTempQueue(queueName: string, channel: amqplib.Channel) {
+    this.log(`creating temp queue ${cyan(queueName)}`);
+    await channel.assertQueue(queueName, {
+      exclusive: true,
+      expires: (this.opts.defaultRPCExpiry * 1 + 1000),
+      durable: false,
+    });
+  }
+
+  async rpcExec(topic: string, data: any, opts?: Rabbitr.IRpcExecOptions): Promise<any>;
+  async rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions): Promise<TOutput>;
+
+  async rpcExec<TInput, TOutput>(topic: string, data: TInput, opts?: Rabbitr.IRpcExecOptions): Promise<TOutput> {
+    await this.connectionPromise;
 
     // this will send the data down the topic and then open up a unique return queue
     const rpcQueue = this._rpcQueueName(topic);
-
     const unique = v4() + '_' + ((Math.round(new Date().getTime() / 1000) + '').substr(5));
     const returnQueueName = `${rpcQueue}.return.${unique}`;
-
     const now = new Date().getTime();
-
-    // bind the response queue
-
     const channel = this._rpcReturnChannel;
+    const replyQueue = this._formatName(returnQueueName);
 
-    const queueDisposer = this._getTempQueue(this._formatName(returnQueueName), channel);
-
-    return Bluebird.using(queueDisposer, () => {
+    try {
+      // bind the response queue
+      await this._createTempQueue(replyQueue, channel);
       this.log(`using rpc return queue ${cyan(returnQueueName)}`);
 
-      const timeoutMS = (opts && opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY) * 1;
+      const timeoutMS = opts && opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY;
 
-      const replyQueue = this._formatName(returnQueueName);
+      // define a promise that will start now, and collect the result that comes back on the response queue
+      const resultPromise = new Promise(async (completed: (responseData: TOutput) => void, failed) => {
+        // define a method that the #consume method will call
+        const gotReply = (msg) => {
+          if (!msg) return;
+          this.log('got rpc reply', msg.content);
 
-      let replyCallback: Function;
-      const replyPromise = Bluebird
-        .fromCallback<amqplib.Message>(callback => { replyCallback = callback; });
-      let gotReply = msg => {
-        if (!msg) return;
-        this.log(`got rpc reply on ${cyan(replyQueue)}`);
 
-        replyCallback(null, msg);
-      };
-
-      return Bluebird.fromCallback(callback =>
-        channel.consume(replyQueue, gotReply, {noAck: true}, callback)
-      ).catch(error => {
-        // istanbul ignore next
-        this.emit('error', error);
-        throw error;
-      }).then<TOutput>(() => {
-        // send the request now
-        const request = {
-          d: data,
-          returnQueue: this._formatName(returnQueueName),
-          expiration: now + timeoutMS,
-        };
-
-        this.log('sending rpc request');
-        this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(request)), {
-          contentType: 'application/json',
-          expiration: `${timeoutMS}`,
-        });
-
-        return Bluebird.race<amqplib.Message>([
-          // set a timeout
-          Bluebird.delay(timeoutMS).then<any>(() => {
-            throw new TimeoutError({isRpc: true, topic});
-          }),
-          replyPromise,
-        ]).then<TOutput>(
-          msg => {
+          // we got a reply, try and parse it
+          try {
             let data: any = msg.content.toString();
             if (msg.properties.contentType === 'application/json') {
               data = parse(data);
@@ -619,134 +412,121 @@ class Rabbitr extends EventEmitter {
               }
             }
 
-            return response;
-          }, error => {
-            // TODO - investigate why bluebird wraps the error here with an object
-            if (error && error.isOperational && error.cause) {
-              throw error.cause;
-            }
-            throw error;
+            completed(response);
           }
-        ).catch(TimeoutError, error => {
-          this.log(`request timeout firing for ${rpcQueue} to ${returnQueueName}`);
-          throw error;
-        });
+          catch(err) {
+            // send the failure to the rejection of the promise
+            failed(err);
+          }
+        };
+
+        try {
+          await channel.consume(replyQueue, gotReply, {noAck: true});
+        }
+        catch(err) {
+          failed(err);
+        }
       });
-    }).asCallback(cb);
+
+      // send the request now
+      const request = {
+        d: data,
+        returnQueue: replyQueue,
+        expiration: now + timeoutMS,
+      };
+      this.log('sending rpc request');
+      this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(request)), {
+        contentType: 'application/json',
+        expiration: `${timeoutMS}`,
+      });
+
+      // race the result against a timeout promise
+      const result = await Promise.race<TOutput, any>([
+        resultPromise,
+        wait(timeoutMS).then(() => {
+          this.log(`request timeout firing for ${rpcQueue} to ${returnQueueName}`);
+          throw new TimeoutError({isRpc: true, topic});
+        })
+      ]);
+
+      return result;
+    }
+    catch(err) {
+      // rethrow, this try catch only exists for the finally
+      throw err;
+    }
+    finally {
+      // clean up our temp queue now we're done
+      channel.deleteQueue(replyQueue, {});
+    }
   }
 
-  rpcListener(topic: string, executor: Rabbitr.IRpcListenerExecutor<any, any>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
-  rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
-  rpcListener<TInput, TOutput>(topic: string, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
-  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>, callback?: Rabbitr.ErrorCallback): Bluebird<void>;
+  async rpcListener(topic: string, opts: Rabbitr.IRpcListenerOptions<any, any>, executor: Rabbitr.IRpcListenerExecutor<any, any>): Promise<void>;
+  async rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): Promise<void>;
 
-  rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor?, callback?: Rabbitr.ErrorCallback): Bluebird<void> {
-    // istanbul ignore next
-    if (!this.connectionPromise.isFulfilled()) {
-      // delay until ready
-      return this.whenReady().then(() =>
-        this.rpcListener(topic, opts, executor)
-      );
-    }
+  async rpcListener<TInput, TOutput>(topic: string, opts: Rabbitr.IRpcListenerOptions<TInput, TOutput>, executor: Rabbitr.IRpcListenerExecutor<TInput, TOutput>): Promise<void> {
+    await this.connectionPromise;
 
-    // istanbul ignore next
-    if ('function' === typeof opts) {
-      // shift arguments
-      callback = executor as any;
-      executor = opts as any;
-      opts = {};
-    }
-
-    var rpcQueue = this._rpcQueueName(topic);
-
+    const rpcQueueName = this._rpcQueueName(topic);
     this.log(`has rpcListener for ${topic}`);
 
-    this.on(rpcQueue, (envelope: Rabbitr.IEnvelopedMessage<TInput>) => {
-      const dataEnvelope = envelope.data;
-
-      const now = new Date().getTime();
-
-      if (now > dataEnvelope.expiration) {
-        envelope.ack();
-        return;
-      }
-
-      const message: Rabbitr.IMessage<TInput> = <Rabbitr.IEnvelopedMessage<TInput> & Rabbitr.IMessage<TInput>>envelope;
-      message.data = dataEnvelope.d;
-
-      // support for older clients - is this needed?
-      message.queue = {
-        shift: message.ack,
-      };
-
-      // TODO - how to handle common error function thing for middleware?
-      this._runMiddleware(message).then(() => {
-        return Bluebird.reduce( // run middleware
-            opts.middleware || [], (memo: void, middlewareFunc: Function) => {
-            return Bluebird.fromCallback<void>(callback => middlewareFunc(message, callback, (err, response) => {
-              callback(err || new MiddlewareResponse(response));
-            }));
-          }, null
-        )
-          .then<TOutput>(() => // then executor
-            maybeFromCallback(executor.bind(null, message))
-          )
-          .catch(error => {
-            // TODO - investigate why bluebird wraps the error here with an object
-            if (error && error.isOperational && error.cause) {
-              throw error.cause;
-            }
-            throw error;
-          })
-          .catch(MiddlewareResponse, ({response}) => { // catch middleware responses
-            return response
-          })
-          .then<any>( // sanitize errors
-            response => {
-              this.log(`${yellow('rpcListener')} responding to topic ${cyan(topic)} with`, response);
-              return {response};
-            }, error => {
-              this.log(`${yellow('rpcListener')} on topic ${cyan(topic)} ${red('hit error')}`, error);
-
-              var isError = error instanceof Error;
-              var errJSON = isError ?
-                stringifyError(error) :
-                stringify(error);
-
-              return {
-                error: errJSON,
-                isError,
-              };
-            }
-          )
-          .then(data => { // send the response
-            // ack here - this will get ignored if the executor has acked or nacked already anyway
-            message.ack();
-
-            // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
-            this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify(data)), {
-              contentType: 'application/json',
-            });
-          }); // TODO - log uncaught errors at this stage? bluebird will do it anyway.
-      });
-    });
-
-    return this.subscribe(rpcQueue,
-      objectAssign({}, opts, {
-        skipMiddleware: true,
+    await this.subscribe(
+      [],
+      rpcQueueName,
+      Object.assign({}, opts, {
+        skipBackoff: true,
         durable: false,
-      })
-    ).asCallback(callback);
-  }
+      }),
+      async (envelope: Rabbitr.IEnvelopedMessage<TInput>) => {
+        // this method runs when we receive a new message
+        try {
+          const dataEnvelope = envelope.data;
+          const now = new Date().getTime();
 
-  // message middleware support
-  use(middlewareFunc: Rabbitr.Middleware) {
-    this.middleware.push(middlewareFunc);
-  }
-  private _runMiddleware(message: Rabbitr.IMessage<any>): Bluebird<void> {
-    return Bluebird.reduce(this.middleware, (memo: void, middlewareFunc) => {
-      return Bluebird.fromCallback<void>(callback => middlewareFunc(message, callback));
-    }, null);
+          if (now > dataEnvelope.expiration) {
+            // we consider the message as 'expired' if the current clock time is after the point at which we think the client would have fired their expiry promise
+            // NB - this means that clock drift between client + server can cause unwanted timeouts
+            envelope.ack();
+            return;
+          }
+
+          const message: Rabbitr.IMessage<TInput> = <Rabbitr.IEnvelopedMessage<TInput> & Rabbitr.IMessage<TInput>>envelope;
+          message.data = dataEnvelope.d;
+
+          let responseData: any;
+          try {
+            const response = await maybeFromCallback(executor.bind(null, message));
+            responseData = { response };
+            this.log(`${yellow('rpcListener')} responding to topic ${cyan(topic)} with`, response);
+          }
+          catch(err) {
+            this.log(`${yellow('rpcListener')} on topic ${cyan(topic)} ${red('hit error')}`, err);
+
+            const isError = err instanceof Error;
+            const errJSON = isError ?
+              stringifyError(err) :
+              stringify(err);
+
+            responseData = {
+              error: errJSON,
+              isError,
+            };
+          }
+
+          // ack here - this will get ignored if the executor has acked or nacked already anyway
+          message.ack();
+
+          // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
+          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify(responseData)), {
+            contentType: 'application/json',
+          });
+        }
+        catch(err) {
+          // something failed when processing the message, nack it
+          envelope.reject();
+        }
+      }
+    );
   }
 };
 
@@ -764,8 +544,6 @@ declare module Rabbitr {
     connectionOpts?: {
       heartbeat?: boolean;
     };
-    ackWarningTimeout?: number;
-    autoAckOnTimeout?: string;
     defaultRPCExpiry?: number;
   }
 
@@ -782,7 +560,6 @@ declare module Rabbitr {
     timeout?: number;
   }
   export interface IRpcListenerOptions<TInput, TOutput> {
-    middleware?: Function[];
     prefetch?: number;
   }
   export type IRpcListenerExecutor<TInput, TOutput> =
@@ -791,7 +568,7 @@ declare module Rabbitr {
 
   export interface ISubscribeOptions {
     prefetch?: number;
-    skipMiddleware?: boolean;
+    skipBackoff?: boolean;
     durable?: boolean;
   }
   export interface ISendOptions {
@@ -804,14 +581,15 @@ declare module Rabbitr {
     topic: string;
     channel: amqplib.Channel;
     data: TData;
+    properties?: any;
 
-    send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
-    send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Bluebird<void>;
+    send(topic: string, data: any, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Promise<void>;
+    send<TInput>(topic: string, data: TInput, cb?: Rabbitr.ErrorCallback, opts?: Rabbitr.ISendOptions): Promise<void>;
 
-    rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Bluebird<any>;
-    rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): Bluebird<any>;
-    rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
-    rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Bluebird<TOutput>;
+    rpcExec(topic: string, data: any, cb?: Rabbitr.Callback<any>): Promise<any>;
+    rpcExec(topic: string, data: any, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<any>): Promise<any>;
+    rpcExec<TInput, TOutput>(topic: string, data: TInput, cb?: Rabbitr.Callback<TOutput>): Promise<TOutput>;
+    rpcExec<TInput, TOutput>(topic: string, data: TInput, opts: Rabbitr.IRpcExecOptions, cb?: Rabbitr.Callback<TOutput>): Promise<TOutput>;
 
     queue?: {
       shift: () => void;
@@ -824,11 +602,6 @@ declare module Rabbitr {
       expiration: number,
       returnQueue: string,
     };
-  }
-
-  export interface Middleware {
-    // TODO - better annotation
-    (message: IMessage<any>, cb: Function, next?: Function): void;
   }
 }
 

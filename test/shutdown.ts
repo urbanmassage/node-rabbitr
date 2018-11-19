@@ -1,7 +1,7 @@
 import Bluebird = require('bluebird');
 import Rabbitr = require('../');
-import {expect} from 'chai';
-import {v4} from 'node-uuid';
+import { expect } from 'chai';
+import { v4 } from 'node-uuid';
 
 describe('shutdown', function() {
   it('should skip rpc after shutdown is triggered', () => {
@@ -17,14 +17,9 @@ describe('shutdown', function() {
       log: require('debug')('rabbit2'),
     });
 
-    return Bluebird.all([
-      rabbit.whenReady(),
-      rabbit2.whenReady(),
-    ]).then(() =>
-      rabbit.rpcListener(queueName, message => {
-        throw new Error('Got a message on non-whitelisted queue');
-      })
-    ).then(() =>
+    return rabbit.rpcListener(queueName, {}, async (message) => {
+      throw new Error('Got a message on non-whitelisted queue');
+    }).then(() =>
       (rabbit as any).shutdown()
     ).then(() =>
       rabbit2.rpcExec(queueName, {}, {timeout: 100})
@@ -35,7 +30,7 @@ describe('shutdown', function() {
           expect(err).to.have.property('name').that.equals('TimeoutError');
         })
     )
-    .finally(() =>
+    .then(() =>
       Bluebird.all([
         rabbit.destroy(),
         rabbit2.destroy(),
@@ -60,14 +55,9 @@ describe('shutdown', function() {
 
     const expected = {test: 40};
 
-    return Bluebird.all([
-      rabbit.whenReady(),
-      rabbit2.whenReady(),
-    ]).then(() =>
-      rabbit.rpcListener(queueName, message => {
-        return Bluebird.resolve(expected).delay(DELAY);
-      })
-    ).then(() =>
+    return rabbit.rpcListener(queueName, {}, async (message) => {
+      return Bluebird.resolve(expected).delay(DELAY);
+    }).then(() =>
       Bluebird.all([
         Bluebird.delay(DELAY/2).then(() => (rabbit as any).shutdown()),
         rabbit2.rpcExec(queueName, {}, {timeout: DELAY + 20})
@@ -76,7 +66,7 @@ describe('shutdown', function() {
           }),
       ])
     )
-    .finally(() =>
+    .then(() =>
       Bluebird.all([
         rabbit.destroy(),
         rabbit2.destroy(),

@@ -11,7 +11,6 @@ RabbitMQ made easy for nodejs
 ```js
 var rabbit = new Rabbitr({
 	host: 'localhost',
-	queuePrefix: null, // prefixed to every queue and exchange name
 });
 ```
 
@@ -19,17 +18,13 @@ var rabbit = new Rabbitr({
 
 ```js
 // in one module
-rabbit.subscribe('sms.send.booking.create');
-rabbit.bindExchangeToQueue('booking.create', 'sms.send.booking.create');
-rabbit.on('sms.send.booking.create', function(message) {
+rabbit.subscribe(['booking.create'], 'sms.send.booking.create', {}, (message) => {
 	// send an sms
 	message.ack();
 });
 
 // in another module
-rabbit.subscribe('email.send.booking.create');
-rabbit.bindExchangeToQueue('booking.create', 'email.send.booking.create');
-rabbit.on('email.send.booking.create', function(message) {
+rabbit.subscribe(['booking.create'], 'email.send.booking.create', {}, (message) => {
 	// send an email
 	message.ack();
 });
@@ -43,10 +38,8 @@ Rabbitr makes using dead letter exchanges dead easy
 
 ```js
 // set timer
-rabbit.subscribe('booking.not-confirmed.timer.set');
-rabbit.bindExchangeToQueue('booking.create', 'booking.not-confirmed.timer.set');
-rabbit.on('booking.not-confirmed.timer.set', function(message) {
-	// do something to calculate how long we want the timer to last
+rabbit.subscribe(['booking.create'], 'booking.not-confirmed.timer.set', {}, (message) => {
+  // do something to calculate how long we want the timer to last
 	var timeFromNow = 900000; // 15 mins
 
 	rabbit.setTimer('booking.not-confirmed.timer.fire', message.data.id, {
@@ -57,18 +50,14 @@ rabbit.on('booking.not-confirmed.timer.set', function(message) {
 });
 
 // clear timer if something has happened that means the timer action isn't required
-rabbit.subscribe('booking.not-confirmed.timer.clear');
-rabbit.bindExchangeToQueue('booking.confirm', 'booking.not-confirmed.timer.clear');
-rabbit.on('booking.not-confirmed.timer.clear', function(message) {
+rabbit.subscribe(['booking.confirm'], 'booking.not-confirmed.timer.clear', {}, (message) => {
 	rabbit.clearTimer('booking.not-confirmed.timer.fire', message.data.id);
 
 	message.ack();
 });
 
 // handle the timer firing
-rabbit.subscribe('booking.not-confirmed.timer.fire');
-rabbit.bindExchangeToQueue('booking.not-confirmed.timer.fire', 'booking.not-confirmed.timer.fire');
-rabbit.on('booking.not-confirmed.timer.fire', function(message) {
+rabbit.subscribe(['booking.not-confirmed.timer.fire'], 'booking.not-confirmed.timer.fire', {}, (message) => {
 	// do something off the back of the timer firing
 	// in this example, message.data.id is the booking id that wasn't confirmed in time
 	message.ack();
@@ -80,37 +69,26 @@ Use Rabbitr's RPC methods if you need to do something and get a response back, a
 
 - Make sure you use the same major version of Rabbitr on both the worker and scheduler sides!
 
-### Define the worker's method (series)
+### Define the worker's method
+Use `prefetch` in the options object to define concurrency (defaults to `1`).
 
 ```js
-rabbit.rpcListener('rpc-test', function(message, cb) {
+rabbit.rpcListener('rpc-test', { prefetch: 5 }, async (message) => {
 	// do something with message.data
 
-	cb(null, {
+	await doSomethingAsyncThatMightThrow(message.data);
+
+  return {
     rpc: 'is cool'
-	});
-});
-```
-
-### Define the worker's method (parallel, kind of)
-
-```js
-rabbit.rpcListener('rpc-test', function(message, cb) {
-	// immediately moves on to processing the next
-	message.ack();
-
-	// do something with message.data
-
-	cb(null, {
-    rpc: 'is cool'
-	});
+	};
 });
 ```
 
 ### Calling the worker's RPC
+Define the timeout in milliseconds in the options object for `rpcExec`
 
 ```js
-rabbit.rpcExec('rpc-test', { some: 'data' }, function(err, response) {
+rabbit.rpcExec('rpc-test', { some: 'data' }, { timeout: 5000 }).then((response) => {
 	// do something with `response`
 	// it will look like { rpc: 'is cool' }
 });

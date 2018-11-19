@@ -1,38 +1,26 @@
-import Bluebird = require('bluebird');
 import Rabbitr = require('../');
-import {expect} from 'chai';
-import {v4} from 'node-uuid';
+import { expect } from 'chai';
+import { v4 } from 'node-uuid';
+import { fromCallback } from 'promise-cb';
+import { wait } from '../lib/wait';
 
 const ACCEPTABLE_TIMER_THRESHOLD = 10;
 
 describe('rabbitr#setTimer', function() {
   let rabbit: Rabbitr;
-  before(() =>
+  beforeEach(() =>
     (
       rabbit = new Rabbitr({
         url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
       })
-    ).whenReady()
+    )
   );
 
   const createdExchanges: string[] = [];
   const createdQueues: string[] = [];
 
-  after(() =>
-    Bluebird.all([
-      // cleanup
-      ...createdExchanges.map(exchangeName =>
-        Bluebird.fromCallback(cb =>
-          rabbit._cachedChannel.deleteExchange(exchangeName, {}, cb)
-        )
-      ),
-      ...createdQueues.map(queueName =>
-        Bluebird.fromCallback(cb =>
-          rabbit._cachedChannel.deleteQueue(queueName, {}, cb)
-        )
-      ),
-      Bluebird.delay(50),
-    ]).then(() => rabbit.destroy())
+  afterEach(() =>
+    rabbit.destroy()
   );
 
   it('should receive a message after a set number of milliseconds', function(done) {
@@ -46,28 +34,22 @@ describe('rabbitr#setTimer', function() {
       testProp: 'timed-example-data-' + queueName
     };
 
-    rabbit.subscribe(queueName)
+    rabbit.subscribe([queueName], queueName, {}, (message) => {
+      message.ack();
+
+      // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
+      const delay = Math.abs(new Date().getTime() - start);
+      expect(delay).to.be.above(DELAY - ACCEPTABLE_TIMER_THRESHOLD);
+      expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
+      done();
+    })
       .then(() => createdQueues.push(queueName))
       .then(() =>
-        rabbit.bindExchangeToQueue(queueName, queueName)
-          .then(() =>
-            createdExchanges.push(queueName)
-          )
-          .then(() =>
-            rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY)
-          )
+        createdExchanges.push(queueName)
+      )
+      .then(() =>
+        rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY)
       );
-
-    rabbit.on(queueName, function(message) {
-      Bluebird.try(() => {
-        message.ack();
-
-        // here we'll assert that the data is the same, plus that the time of delivery is at least DELAY give or take kAcceptableTimerThreshold
-        const delay = Math.abs(new Date().getTime() - start);
-        expect(delay).to.be.above(DELAY - ACCEPTABLE_TIMER_THRESHOLD);
-        expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
-      }).asCallback(done);
-    });
   });
 
   it('should not receive a message if #clearTimer is called', () => {
@@ -81,21 +63,15 @@ describe('rabbitr#setTimer', function() {
 
     let receivedMessages = 0;
 
-    rabbit.subscribe(queueName)
-      .then(() => createdQueues.push(queueName))
-      .then(() =>
-        rabbit.bindExchangeToQueue(queueName, queueName)
-          .then(() =>
-            createdExchanges.push(queueName)
-          )
-      );
-
-    // listen for messages on the queue - nothing should be received here if this works!
-    rabbit.on(queueName, function(message) {
+    rabbit.subscribe([queueName], queueName, {}, (message) => {
       message.ack();
 
       receivedMessages++;
-    });
+    })
+      .then(() => createdQueues.push(queueName))
+      .then(() =>
+        createdExchanges.push(queueName)
+      );
 
     // set the timer and schedule the clear
     rabbit.setTimer(queueName, 'unique_clearing_test_id', testData, DELAY);
@@ -104,7 +80,7 @@ describe('rabbitr#setTimer', function() {
     }, DELAY / 2);
 
     // also set a timeout to fire after the message should have already have been delivered to check it wasn't
-    return Bluebird.delay(DELAY)
+    return wait(DELAY)
       .then(() => {
         expect(receivedMessages).to.equal(0);
       });

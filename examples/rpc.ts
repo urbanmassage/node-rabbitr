@@ -5,7 +5,7 @@ const rabbit = new Rabbitr({
   queuePrefix: 'yo'
 });
 
-rabbit.rpcListener('example.rpc', function(message, cb) {
+rabbit.rpcListener('example.rpc', null, function(message, cb) {
   console.log('Got message', message);
   console.log('Message data is', message.data);
 
@@ -18,7 +18,7 @@ rabbit.rpcListener('example.rpc', function(message, cb) {
 
 rabbit.rpcExec('example.rpc', {
   thisIs: 'the-input'
-}, (err, response) => {
+}).then((response) => {
   console.log('Got RPC response', response.data);
 
   setTimeout(function() {

@@ -1,7 +1,6 @@
-import Bluebird = require('bluebird');
 import Rabbitr = require('../');
-import {expect} from 'chai';
-import {v4} from 'node-uuid';
+import { expect } from 'chai';
+import { v4 } from 'node-uuid';
 
 describe('rabbitr#pubsub', function() {
   let rabbit: Rabbitr;
@@ -10,26 +9,14 @@ describe('rabbitr#pubsub', function() {
       rabbit = new Rabbitr({
         url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
       })
-    ).whenReady()
+    )
   );
 
   const createdExchanges: string[] = [];
   const createdQueues: string[] = [];
 
   after(() =>
-    Bluebird.all([
-      // cleanup
-      ...createdExchanges.map(exchangeName =>
-        Bluebird.fromCallback(cb =>
-          rabbit._cachedChannel.deleteExchange(exchangeName, {}, cb)
-        )
-      ),
-      ...createdQueues.map(queueName =>
-        Bluebird.fromCallback(cb =>
-          rabbit._cachedChannel.deleteQueue(queueName, {}, cb)
-        )
-      ),
-    ]).then(() => rabbit.destroy())
+    rabbit.destroy()
   );
 
   it('should receive messages on the specified queue', function(done) {
@@ -40,27 +27,17 @@ describe('rabbitr#pubsub', function() {
       testProp: 'pubsub-example-data-' + queueName
     };
 
-    rabbit.subscribe(queueName)
-      .then(() => createdQueues.push(queueName))
-      .then(() =>
-        rabbit.bindExchangeToQueue(exchangeName, queueName)
-          .then(() =>
-            createdExchanges.push(exchangeName)
-          )
-          .then(() =>
-            rabbit.send(exchangeName, testData)
-          )
-      );
+    rabbit.subscribe([exchangeName], queueName, {}, (message) => {
+      message.ack();
 
-    rabbit.on(queueName, function(message) {
-      Bluebird
-        .try(() => {
-          message.ack();
-
-          // here we'll assert that the data is the same- the fact we received it means the test has basically passed anyway
-          expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
-        })
-        .asCallback(done);
+      // here we'll assert that the data is the same- the fact we received it means the test has basically passed anyway
+      expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
+      done();
+    })
+    .then(() => {
+      createdQueues.push(queueName);
+      createdExchanges.push(exchangeName);
+      setTimeout(() => {rabbit.send(exchangeName, testData)}, 200);
     });
   });
 
@@ -70,27 +47,18 @@ describe('rabbitr#pubsub', function() {
 
     const data = 'Hello world!';
 
-    rabbit.subscribe(queueName)
-      .then(() => createdQueues.push(queueName))
-      .then(() =>
-        rabbit.bindExchangeToQueue(exchangeName, queueName)
-          .then(() =>
-            createdExchanges.push(exchangeName)
-          )
-          .then(() =>
-            rabbit.send(exchangeName, new Buffer(data))
-          )
-      );
+    rabbit.subscribe([exchangeName], queueName, {}, (message) => {
+      message.ack();
 
-    rabbit.on(queueName, function(message) {
-      Bluebird
-        .try(() => {
-          message.ack();
+      expect(message.data).to.be.an.instanceOf(Buffer);
+      expect(message.data.toString()).to.equal(data);
 
-          expect(message.data).to.be.an.instanceOf(Buffer);
-          expect(message.data.toString()).to.equal(data);
-        })
-        .asCallback(done);
+      done();
+    })
+    .then(() => {
+      createdQueues.push(queueName);
+      createdExchanges.push(exchangeName);
+      setTimeout(() => {rabbit.send(exchangeName, new Buffer(data))}, 200);
     });
   });
 });
