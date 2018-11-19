@@ -387,7 +387,7 @@ class Rabbitr {
       const timeoutMS = opts && opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY;
 
       // define a promise that will start now, and collect the result that comes back on the response queue
-      const resultPromise = new Promise(async (completed: (responseData: TOutput) => void, failed) => {
+      const resultPromise = new Promise((completed: (responseData: TOutput) => void, failed) => {
         // define a method that the #consume method will call
         const gotReply = (msg) => {
           if (!msg) return;
@@ -420,12 +420,9 @@ class Rabbitr {
           }
         };
 
-        try {
-          await channel.consume(replyQueue, gotReply, {noAck: true});
-        }
-        catch(err) {
+        channel.consume(replyQueue, gotReply, {noAck: true}).catch((err) => {
           failed(err);
-        }
+        });
       });
 
       // send the request now
