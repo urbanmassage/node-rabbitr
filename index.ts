@@ -270,6 +270,7 @@ class Rabbitr {
         });
 
         // if we hit here, we should ack
+        this.log(`acking on ${cyan(queueName)}`, data);
         channel.ack(msg);
       }
       catch(err) {
@@ -278,6 +279,7 @@ class Rabbitr {
           // super simple backoff achieved by just delaying performing a #nack
           await wait(BACKOFF_EXPIRY);
         }
+        this.log(`rejecting on ${cyan(queueName)}`, data);
         channel.nack(msg);
       }
       finally {
