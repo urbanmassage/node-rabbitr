@@ -381,6 +381,9 @@ class Rabbitr {
     const channel = this._rpcReturnChannel;
     const replyQueue = this._formatName(returnQueueName);
 
+    // used to determine whether we should ignore timeouts
+    let isCompleted = false;
+
     let replyConsumerTag: string = null;
 
     try {
@@ -397,6 +400,7 @@ class Rabbitr {
           if (!msg) return;
           this.log('got rpc reply', msg.content);
 
+          isCompleted = true;
 
           // we got a reply, try and parse it
           try {
@@ -447,6 +451,10 @@ class Rabbitr {
       const result = await Promise.race<TOutput, any>([
         resultPromise,
         wait(timeoutMS).then(() => {
+          if (isCompleted) {
+            return;
+          }
+
           this.log(`request timeout firing for ${rpcQueue} to ${returnQueueName}`);
           throw new TimeoutError({isRpc: true, topic});
         })
