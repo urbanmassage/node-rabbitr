@@ -118,6 +118,11 @@ class Rabbitr {
     this.log('#connect');
     this.log(`using connection url ${yellow(this.opts.url)}`);
     this.connectionPromise = this.initiateConnection();
+    this.connectionPromise.catch((err) => {
+      console.error('failed to connect to rabbit');
+      console.error(err);
+      process.exit(1);
+    });
   }
 
   private async initiateConnection(): Promise<amqplib.Connection> {
