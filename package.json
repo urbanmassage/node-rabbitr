@@ -23,6 +23,7 @@
   },
   "devDependencies": {
     "@types/amqplib": "^0.5.13",
+    "@types/bluebird": "^3.5.27",
     "@types/chai": "^4.2.0",
     "@types/chalk": "^2.2.0",
     "@types/mocha": "^5.2.7",
@@ -33,7 +34,7 @@
     "mocha": "^5.2.0",
     "nyc": "^7.1.0",
     "source-map-support": "^0.4.15",
-    "typescript": "^2.6.2"
+    "typescript": "^3.5.3"
   },
   "typings": "index.d.ts",
   "directories": {
