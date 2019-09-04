@@ -470,7 +470,7 @@ class Rabbitr {
       });
 
       // race the result against a timeout promise
-      const result = await Promise.race<TOutput, any>([
+      const result = await Promise.race<any>([
         resultPromise,
         wait(timeoutMS).then(() => {
           if (isCompleted) {

@@ -34,8 +34,8 @@ describe('rabbitr#simple-backoff', function() {
   it('should wait the amount of times specified in the backoff config', function(done) {
     this.timeout(60000);
 
-    const exchangeName = v4() + '.backoff_test';
-    const queueName = v4() + '.backoff_test';
+    const exchangeName = v4() + '.simple_backoff_test';
+    const queueName = v4() + '.simple_backoff_test';
 
     const testData = {
       testProp: 'backoff-example-data-' + queueName
