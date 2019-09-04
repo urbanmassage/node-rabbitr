@@ -1,5 +1,5 @@
 import Bluebird = require('bluebird');
-import Rabbitr = require('../');
+import Rabbitr = require('..');
 import { expect } from 'chai';
 import { v4 } from 'node-uuid';
 

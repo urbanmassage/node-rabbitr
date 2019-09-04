@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import Rabbitr = require('../');
+import Rabbitr = require('..');
 import { v4 } from 'node-uuid';
 import { fromCallback } from 'promise-cb';
 import { wait } from '../lib/wait';
