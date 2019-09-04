@@ -1,5 +1,4 @@
 import { cyan, red, yellow } from 'chalk';
-import { EventEmitter } from 'events';
 
 import * as amqplib from 'amqplib';
 import { v4 } from 'node-uuid';
@@ -7,6 +6,8 @@ import { fromCallback } from 'promise-cb';
 import { wait } from './lib/wait';
 import { initWhitelist, shouldSkipSubscribe, log } from './lib/debug';
 import { stringify, stringifyError, parse, parseError } from './lib/serialization';
+
+import {IBackoffLogic} from './backoff/ibackofflogic'
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 const BACKOFF_EXPIRY = 2000; // we use a fixed backoff expiry for now of 2 seconds
@@ -50,7 +51,6 @@ class Rabbitr {
   private _openChannels: amqplib.Channel[];
 
   private _timerChannel: amqplib.Channel;
-  private _backoffChannel: amqplib.Channel;
   private _publishChannel: amqplib.Channel;
   private _rpcReturnChannel: amqplib.Channel;
   _cachedChannel: amqplib.Channel;
@@ -148,7 +148,6 @@ class Rabbitr {
     ]);
     this._timerChannel = channels[0];
     this._publishChannel = channels[0];
-    this._backoffChannel = channels[0];
     this._cachedChannel = channels[0];
     this._rpcReturnChannel = channels[1];
     this._openChannels = this._openChannels.concat(channels);
@@ -191,17 +190,20 @@ class Rabbitr {
 
   async send(topic: string, data: any, opts?: Rabbitr.ISendOptions): Promise<void>;
   async send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Promise<void>;
-
   async send<TInput>(topic: string, data: TInput, opts?: Rabbitr.ISendOptions): Promise<void> {
     await this.connectionPromise;
     this.log(yellow('send'), topic, data, opts);
+
+    const routingKey = (opts && opts.routeKey) || "*"
+    const headers = (opts && opts.headers) || {}
 
     // first ensure the exchange exists
     await this._publishChannel.assertExchange(this._formatName(topic), 'topic', {});
 
     // then publish the message
-    const isSuccess = this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
+    const isSuccess = this._publishChannel.publish(this._formatName(topic), routingKey, new Buffer(stringify(data)), {
       contentType: 'application/json',
+      headers
     });
 
     if(!isSuccess) {
@@ -240,7 +242,7 @@ class Rabbitr {
     channel.prefetch(opts && opts.prefetch || 1);
 
     // define the internal message processing handler
-    const processMessage = async (msg: any) => {
+    const processMessage = async (msg: amqplib.Message) => {
       if (!msg) return;
       if (this.isShuttingDown) {
         this.log(`${red('rejected')} message on queueName ${yellow(queueName)} because we're shutting down`);
@@ -248,7 +250,7 @@ class Rabbitr {
         return;
       }
 
-      let data = msg.content.toString();
+      let data:any = msg.content.toString();
       if (msg.properties.contentType === 'application/json') {
         data = parse(data);
       }
@@ -279,13 +281,27 @@ class Rabbitr {
         channel.ack(msg);
       }
       catch(err) {
-        // if we hit here, we should nack
-        if (!opts.skipBackoff) {
-          // super simple backoff achieved by just delaying performing a #nack
-          await wait(BACKOFF_EXPIRY);
+        if(this.opts.backoffLogic){
+          const currentRetryCount = msg.properties.headers['x-retry-count'] || 1;
+          if(!this.opts.backoffLogic.shouldRetry(currentRetryCount)){
+            //do something
+            channel.ack(msg)
+          }
+          const waitTime = this.opts.backoffLogic.getWaitTime(currentRetryCount);
+          this.log(`waiting ${waitTime} seconds before retrying message`);
+          await fromCallback(cb => setTimeout(cb, waitTime * 1000));
+
+          const newRetryCount = currentRetryCount + 1;
+          this.send(msg.fields.exchange, data, {routeKey: queueName, headers: {'x-retry-count': newRetryCount}})
+          channel.ack(msg);
+        }else{
+          if (!opts.skipBackoff) {
+            //super simple backoff achieved by just delaying performing a #nack
+            await wait(BACKOFF_EXPIRY);
+          }
+          this.log(`rejecting on ${cyan(queueName)}`, data);
+          channel.nack(msg);
         }
-        this.log(`rejecting on ${cyan(queueName)}`, data);
-        channel.nack(msg);
       }
       finally {
         -- this.pendingMessagesCount;
@@ -310,6 +326,7 @@ class Rabbitr {
       await channel.assertExchange(this._formatName(exchange), 'topic', null);
 
       // finally bind the queue + exchange together
+      await channel.bindQueue(this._formatName(queue), this._formatName(exchange), this._formatName(queue), {});
       await channel.bindQueue(this._formatName(queue), this._formatName(exchange), '*', {});
     }
     catch(err) {
@@ -569,6 +586,7 @@ declare module Rabbitr {
       heartbeat?: boolean;
     };
     defaultRPCExpiry?: number;
+    backoffLogic?: IBackoffLogic
   }
 
   export interface ErrorCallback {
@@ -596,6 +614,10 @@ declare module Rabbitr {
     durable?: boolean;
   }
   export interface ISendOptions {
+    routeKey?:string;
+    headers?: {
+      'x-retry-count'?: number
+    }
   }
 
   export interface IMessage<TData> {
