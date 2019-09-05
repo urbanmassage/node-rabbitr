@@ -1,13 +1,13 @@
 import Rabbitr = require('..');
 import { expect } from 'chai';
 import { v4 } from 'node-uuid';
-import {Intervals} from '../backoff/intervals'
+import {Interval} from '../backoff/intervals'
 import {Exponential} from '../backoff/exponential'
 import {Immediate} from '../backoff/immediate'
-import { AbstractBackoff } from '../backoff/AbstractBackoff';
+import { AbstractBackoff } from '../backoff/abstractbackoff';
 
 const logics: {name:string, logic:AbstractBackoff, subscriberLogic: AbstractBackoff}[] = [
-  { name: 'interval', logic:new Intervals([5,10,20]), subscriberLogic: new Intervals([1, 5, 10])},
+  { name: 'interval', logic:new Interval([5,10,20]), subscriberLogic: new Interval([1, 5, 10])},
   { name: 'exponential', logic: new Exponential(2, 3), subscriberLogic: new Exponential(1, 3)},
   { name: 'immediate', logic: new Immediate(3), subscriberLogic: new Immediate(5)}
 ]

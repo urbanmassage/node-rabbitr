@@ -1,6 +1,6 @@
 import { AbstractBackoff } from './abstractbackoff';
 
-export class Intervals extends AbstractBackoff {
+export class Interval extends AbstractBackoff {
   private retrySchecule: number[];
 
   constructor(retrySchecule: number[]) {
