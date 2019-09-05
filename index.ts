@@ -281,13 +281,17 @@ class Rabbitr {
         channel.ack(msg);
       }
       catch(err) {
-        if(this.opts.backoffLogic){
+        if(opts.backoffLogic || this.opts.backoffLogic){
           const currentRetryCount = msg.properties.headers['x-retry-count'] || 1;
-          if(!this.opts.backoffLogic.shouldRetry(currentRetryCount)){
+
+          // get the subscriber level backoff else fallback to the global one
+          const backoffLogic = opts.backoffLogic || this.opts.backoffLogic;
+
+          if(!backoffLogic.shouldRetry(currentRetryCount)){
             //do something
             channel.ack(msg)
           }
-          const waitTime = this.opts.backoffLogic.getWaitTime(currentRetryCount);
+          const waitTime = backoffLogic.getWaitTime(currentRetryCount);
           this.log(`waiting ${waitTime} seconds before retrying message`);
           await fromCallback(cb => setTimeout(cb, waitTime * 1000));
 
@@ -612,6 +616,7 @@ declare module Rabbitr {
     prefetch?: number;
     skipBackoff?: boolean;
     durable?: boolean;
+    backoffLogic?: AbstractBackoff
   }
   export interface ISendOptions {
     routeKey?:string;
