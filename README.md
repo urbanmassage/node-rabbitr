@@ -94,6 +94,38 @@ rabbit.rpcExec('rpc-test', { some: 'data' }, { timeout: 5000 }).then((response) 
 });
 ```
 
+## Backoff
+Rabbitr supports a few backoff types
+- Immediate
+- Interval
+- Exponential
+
+These backoff types can either be set globally against the whole of rabbitr by passing it into your initialization
+
+```js
+rabbit = new Rabbitr({
+  url: 'amqp://guest:guest@localhost/%2F',
+  backoffLogic: backoff
+})
+```
+or can be set at the individual subscriber level
+```js
+rabbit.subscribe([exchangeName], queueName, {backoffLogic:backoff}, (message) => {
+  // Your logic goes here
+});
+```
+
+If there is no logic set at the subscriber level then we will fall back to the global backoff (if one is configured)
+
+### Backoff types
+Here is a description of the currently implemented backoffs
+#### Immediate
+This logic is used if you want to retry a certain amount of times without waiting, this can initialized with the following `new Immmediate({number of times to retry})`
+#### Interval
+Much like the Immediate logic this will retry a set amount of times, but instead you pass the intervals that you want to retry with `new Interval([{values for retry}])`
+#### Exponential
+This uses a max number of retries and a multiplier to determine the amount of seconds to wait `new Exponential({multiplier}, {number of times to retry})`
+
 ## Debugging
 
 To debug rabbitr, you can enable logging by setting the environment variable

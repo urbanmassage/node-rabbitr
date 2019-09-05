@@ -1,15 +1,17 @@
 language: node_js
+os: linux
+dist: trusty
 node_js:
-- '10'
-- '8'
-- '6'
+  - "10"
+  - "8"
+  - "6"
 services:
-- rabbitmq
+  - rabbitmq
 script:
-- npm run build -- --declaration
-- npm test
+  - npm run build -- --declaration
+  - npm test
 after_success:
-- test $TRAVIS_NODE_VERSION = "8" && npm run coverage && npm run sendcoverage
+  - test $TRAVIS_NODE_VERSION = "8" && npm run coverage && npm run sendcoverage
 notifications:
   email:
     on_success: change
@@ -18,10 +20,10 @@ notifications:
     rooms:
       secure: YtgcUk4x8EBdac8+vD4VvgImAoOwDmiulQKmkXRxzBTFyJodc+cpVX+bRI/3YY5PyiE1GefFJAKlR23dmRnAn+gBjOBcPu8PlUrSioKvvM4WGCiFJ4SqlrJHVBIUlwQCpThmregGjrpdOAlTmGDcsYrU9XC8kF2jUSAcp3/gOkhtHchKgxSW8sYwqlUg28YnMJhHhWWV0ZF3iuMPDiwlOEElbqnLPj5F9ARKKUqR8XOc+9OFCi6oliYjULAoJ0scliRhSC2+HAAwn95jp+9BozE3oKJY/nY2fawPHilL3GObsEgTxf/CxAY0CvrTYXn2cOhmiIUpxpLFpxIjwWs/vd9zACtu4RxNleQ9897yj78t0HXO7E+YB8/vkkYrOukbntLQsEtIAQrRihcjIgwBo2uMHk8XryqUJ3oB4pPordxVJTsQdG5/L7s9Uyn19Lp3SfUNZa/bdJE/Ylm0JgPz7vDiZlo4ZecvxComynCvpfUaSiXfKUYhC+7Jd/kXzJl06ozKY9aMaoExGqT3w5mcO/zHjC/z2vSoSM5lrI8imm9IC2OScbOSTCv1Mcei8RXdETkhD9yNgRB6GQW2H0nI7d8Lo2YjUxUZ9oBjT+g5njDfeObEXcKecjtj4fuHLCLPv1kXdRajnY1eXN4F+2RdcIY/W7l3H5RKC56dg1BYFCo=
     template:
-    - <b>%{result}:</b> <a href="https://github.com/%{repository_slug}">%{repository_slug}</a>#<a
-      href="%{build_url}">%{build_number}</a> (<a href="https://github.com/%{repository_slug}/tree/%{branch}">%{branch}</a>
-      - <a href="%{compare_url}">%{commit}</a> by %{author})<br>%{message} It took
-      %{duration}.<br><pre>%{commit_message}</pre>
+      - <b>%{result}:</b> <a href="https://github.com/%{repository_slug}">%{repository_slug}</a>#<a
+        href="%{build_url}">%{build_number}</a> (<a href="https://github.com/%{repository_slug}/tree/%{branch}">%{branch}</a>
+        - <a href="%{compare_url}">%{commit}</a> by %{author})<br>%{message} It took
+        %{duration}.<br><pre>%{commit_message}</pre>
     format: html
 deploy:
   provider: npm
@@ -30,7 +32,7 @@ deploy:
   api_key:
     secure: x3vSesgwXgw2S7AWad/jYprM/vdtI6pk86F4t+E3gyIuRIksXpGqH/M1pmboyVQAyApfngBRQPXjhcTw3MWD7hJhC6qmhHcSpibfVmtFgZoUnfHyyjfhVbjm5IgPnrjzFbyPzlU7sI/0X3knQWJt711VbYnatyehRZJnORDr8L/Ecyj/bhJLOrDHBu02OFppdyGbGjPcXYSyt71zLH74LxsZedOWUdt9ThIOuJXrV4heV86jMg9RjHDG6PzZmpU5zKiYEgnCsWZEw/wLNKjlFWGDY+m2Z7YJkLKtXC9Ix4MSOel9/hITIcQ6zT0c+zV2n0YunAtxJoGUpHAcQQzd1zz9V8LzfC3UZzKoheBbmv7PD/ERvG62GaLkTWCuaDuRAl9QF/sF9G38QHqfvmtYOhVkKFTDPzsthMzzChT29ya3vPzDFLXrXC2zRRjSp7RefyrYf68n7NGDmf5GO2Tr7d+E0WeNjCvlTBiwvXtCfORos1S64w/MagLaD4jxp4mbmQPaYqiQNaqTGjfga/R5e/O8XGnb3yiGjUGCTwKHciDavj6HDHffMLanCxz/2TNSMjn+fcHqcIp5TUyY6Xns6hivcXABVin4aReAeqDaEP2lX4QUNMUgLvUPTEvXhz+CX5C175WU9pnbRGhl+wAb3AQVGoV/QCiK0isKRuVVkWE=
   on:
-    node: '8'
+    node: "8"
     tags: true
     repo: urbanmassage/node-rabbitr
   skip_cleanup: true

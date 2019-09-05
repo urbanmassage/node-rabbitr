@@ -16,6 +16,4 @@ rabbit.subscribe(['example.exchange'], 'example.queue', null, message => {
 
 rabbit.send('example.exchange', {
   thisIs: 'example-data',
-}, err => {
-  console.log('Sent message', err);
-});
+})
