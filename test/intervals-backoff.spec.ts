@@ -2,114 +2,121 @@ import Rabbitr = require('..');
 import { expect } from 'chai';
 import { v4 } from 'node-uuid';
 import {Intervals} from '../backoff/intervals'
+import {Exponential} from '../backoff/exponential'
+import {Immediate} from '../backoff/immediate'
+import { AbstractBackoff } from '../backoff/AbstractBackoff';
 
-describe('rabbitr#intervals-backoff', function() {
-  let rabbit: Rabbitr;
-  let backoff = new Intervals([5,10,20])
+const logics: {name:string, logic:AbstractBackoff, subscriberLogic: AbstractBackoff}[] = [
+  { name: 'interval', logic:new Intervals([5,10,20]), subscriberLogic: new Intervals([1, 5, 10])},
+  { name: 'exponential', logic: new Exponential(2, 3), subscriberLogic: new Exponential(1, 3)},
+  { name: 'immediate', logic: new Immediate(3), subscriberLogic: new Immediate(5)}
+]
 
-  before(() =>
-    (
-      rabbit = new Rabbitr({
-        url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
-        backoffLogic: backoff
-      })
-    )
-  );
+for(let logic of logics){
+  describe(`rabbitr#${logic.name}-backoff`, function() {
+    let rabbit: Rabbitr;
+    let backoff = logic.logic
 
-  const createdExchanges: string[] = [];
-  const createdQueues: string[] = [];
+    before(() =>
+      (
+        rabbit = new Rabbitr({
+          url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
+          backoffLogic: backoff
+        })
+      )
+    );
 
-  after(() =>
-    Promise.all([
-      // cleanup
-      ...createdExchanges.map(exchangeName =>
-        rabbit._cachedChannel.deleteExchange(exchangeName, {})
-      ),
-      ...createdQueues.map(queueName =>
-        rabbit._cachedChannel.deleteQueue(queueName, {})
-      ),
-    ]).then(() => rabbit.destroy())
-  );
+    const createdExchanges: string[] = [];
+    const createdQueues: string[] = [];
 
-  it('should wait the amount of times specified in the backoff config', function(done) {
-    this.timeout(60000);
+    after(() =>
+      Promise.all([
+        // cleanup
+        ...createdExchanges.map(exchangeName =>
+          rabbit._cachedChannel.deleteExchange(exchangeName, {})
+        ),
+        ...createdQueues.map(queueName =>
+          rabbit._cachedChannel.deleteQueue(queueName, {})
+        ),
+      ]).then(() => rabbit.destroy())
+    );
 
-    const exchangeName = v4() + '.simple_backoff_test';
-    const queueName = v4() + '.simple_backoff_test';
+    it('should wait the amount of times specified in the backoff config', function(done) {
+      this.timeout(60000);
 
-    const testData = {
-      testProp: 'backoff-example-data-' + queueName
-    };
+      const exchangeName = `${v4()}_${logic.name}_backoff_test`;
+      const queueName = `${v4()}_${logic.name}_backoff_test`;
 
-    let receivedIncrementer = 0;
-    let lastReceivedUnixMS = null;
+      const testData = {
+        testProp: `${logic.name}-example-data-` + queueName
+      };
 
-    rabbit.subscribe([exchangeName], queueName, {}, (message) => {
-      receivedIncrementer++;
+      let receivedIncrementer = 0;
+      let lastReceivedUnixMS = null;
 
-      expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
+      rabbit.subscribe([exchangeName], queueName, {}, (message) => {
+        receivedIncrementer++;
 
-      const nowUnixMS = new Date().getTime();
-      if(lastReceivedUnixMS !== null) {
-        expect(nowUnixMS - lastReceivedUnixMS).to.be.gt(backoff.getWaitTime(receivedIncrementer-1));
-      }
-      lastReceivedUnixMS = nowUnixMS;
+        if(!backoff.shouldRetry(receivedIncrementer)) {
+          message.ack();
+          setTimeout(() => {
+            done();
+          }, 100);
+        }
 
-      if(receivedIncrementer < 4) {
+        const nowUnixMS = new Date().getTime();
+        if(lastReceivedUnixMS !== null) {
+          expect(nowUnixMS - lastReceivedUnixMS).to.be.gt(backoff.getWaitTime(receivedIncrementer-1));
+        }
+        lastReceivedUnixMS = nowUnixMS;
+
         message.reject();
-      }
-      else {
-        message.ack();
-        setTimeout(() => {
-          done();
-        }, 100);
-      }
+
+      });
+      createdQueues.push(queueName);
+      createdExchanges.push(exchangeName);
+
+      setTimeout(() => {rabbit.send(exchangeName, testData)}, 200);
     });
-    createdQueues.push(queueName);
-    createdExchanges.push(exchangeName);
 
-    setTimeout(() => {rabbit.send(exchangeName, testData)}, 200);
-  });
+    it('should wait the amount of times specified in the backoff config when at subscriber level', function(done) {
+      this.timeout(60000);
 
-  it('should wait the amount of times specified in the backoff config when at subscriber level', function(done) {
-    this.timeout(60000);
+      const exchangeName = `${v4()}_${logic.name}_backoff_test`;
+      const queueName = `${v4()}_${logic.name}_backoff_test`;
 
-    const exchangeName = v4() + '.simple_backoff_subscriber_test';
-    const queueName = v4() + '.simple_backoff_subscriber_test';
+      const testData = {
+        testProp: `${logic.name}-example-data-` + queueName
+      };
 
-    const testData = {
-      testProp: 'backoff-subscriber-example-data-' + queueName
-    };
+      let backoff = logic.subscriberLogic
 
-    let backoff = new Intervals([1,5,10])
+      let receivedIncrementer = 0;
+      let lastReceivedUnixMS = null;
 
-    let receivedIncrementer = 0;
-    let lastReceivedUnixMS = null;
+      rabbit.subscribe([exchangeName], queueName, {backoffLogic:backoff}, (message) => {
+        receivedIncrementer++;
 
-    rabbit.subscribe([exchangeName], queueName, {backoffLogic:backoff}, (message) => {
-      receivedIncrementer++;
+        if(!backoff.shouldRetry(receivedIncrementer)) {
+          message.ack();
+          setTimeout(() => {
+            done();
+          }, 100);
+        }
 
-      expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
+        const nowUnixMS = new Date().getTime();
+        if(lastReceivedUnixMS !== null) {
+          expect(nowUnixMS - lastReceivedUnixMS).to.be.gt(backoff.getWaitTime(receivedIncrementer-1));
+        }
+        lastReceivedUnixMS = nowUnixMS;
 
-      const nowUnixMS = new Date().getTime();
-      if(lastReceivedUnixMS !== null) {
-        expect(nowUnixMS - lastReceivedUnixMS).to.be.gt(backoff.getWaitTime(receivedIncrementer-1));
-      }
-      lastReceivedUnixMS = nowUnixMS;
-
-      if(receivedIncrementer < 4) {
         message.reject();
-      }
-      else {
-        message.ack();
-        setTimeout(() => {
-          done();
-        }, 100);
-      }
-    });
-    createdQueues.push(queueName);
-    createdExchanges.push(exchangeName);
 
-    setTimeout(() => {rabbit.send(exchangeName, testData)}, 200);
+      });
+      createdQueues.push(queueName);
+      createdExchanges.push(exchangeName);
+
+      setTimeout(() => {rabbit.send(exchangeName, testData)}, 200);
+    });
   });
-});
+}
