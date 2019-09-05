@@ -51,7 +51,6 @@ describe('rabbitr#simple-backoff', function() {
 
       const nowUnixMS = new Date().getTime();
       if(lastReceivedUnixMS !== null) {
-        console.log(nowUnixMS - lastReceivedUnixMS)
         expect(nowUnixMS - lastReceivedUnixMS).to.be.gt(backoff.getWaitTime(receivedIncrementer-1));
       }
       lastReceivedUnixMS = nowUnixMS;
