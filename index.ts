@@ -7,7 +7,7 @@ import { wait } from './lib/wait';
 import { initWhitelist, shouldSkipSubscribe, log } from './lib/debug';
 import { stringify, stringifyError, parse, parseError } from './lib/serialization';
 
-import {IBackoffLogic} from './backoff/ibackofflogic'
+import {AbstractBackoff} from './backoff/abstractbackoff'
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 const BACKOFF_EXPIRY = 2000; // we use a fixed backoff expiry for now of 2 seconds
@@ -586,7 +586,7 @@ declare module Rabbitr {
       heartbeat?: boolean;
     };
     defaultRPCExpiry?: number;
-    backoffLogic?: IBackoffLogic
+    backoffLogic?: AbstractBackoff
   }
 
   export interface ErrorCallback {

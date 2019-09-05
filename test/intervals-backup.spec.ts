@@ -1,11 +1,11 @@
-import Rabbitr = require('../');
+import Rabbitr = require('..');
 import { expect } from 'chai';
 import { v4 } from 'node-uuid';
-import {SimpleBackoff} from '../backoff/simple-backoff'
+import {Intervals} from '../backoff/intervals'
 
 describe('rabbitr#simple-backoff', function() {
   let rabbit: Rabbitr;
-  let backoff = new SimpleBackoff([5,10,20])
+  let backoff = new Intervals([5,10,20])
 
   before(() =>
     (

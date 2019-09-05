@@ -1,17 +1,14 @@
-import {IBackoffLogic} from './ibackofflogic'
+import { AbstractBackoff } from './abstractbackoff';
 
-export class SimpleBackoff implements IBackoffLogic {
+export class Intervals extends AbstractBackoff {
   private retrySchecule: number[];
 
   constructor(retrySchecule: number[]) {
+    super(retrySchecule.length)
     this.retrySchecule = retrySchecule;
   }
 
   public getWaitTime(retryNumber: number): number {
     return this.retrySchecule[retryNumber - 1];
-  }
-
-  public shouldRetry(retryNumber: number): boolean {
-    return retryNumber <= this.retrySchecule.length;
   }
 }
