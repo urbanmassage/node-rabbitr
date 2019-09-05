@@ -1,7 +1,7 @@
 import Rabbitr = require('..');
 import { expect } from 'chai';
 import { v4 } from 'node-uuid';
-import {Interval} from '../backoff/intervals'
+import {Interval} from '../backoff/interval'
 import {Exponential} from '../backoff/exponential'
 import {Immediate} from '../backoff/immediate'
 import { AbstractBackoff } from '../backoff/abstractbackoff';
