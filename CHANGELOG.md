@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## 11.1.6
+## 11.1.8
 - Handle a null / undefined `opts` parameter for the `subscribe` method without getting into an error state on rejection
 
 ## 11.0.0
