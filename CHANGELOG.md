@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 11.1.6
+- Handle a null / undefined `opts` parameter for the `subscribe` method without getting into an error state on rejection
+
 ## 11.0.0
 - Removes support for node before version 6
 - Major rewrite which changes a lot of interfaces
