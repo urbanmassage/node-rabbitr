@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 11.1.9
+- Build on node 10 + 12
+
 ## 11.1.8
 - Handle a null / undefined `opts` parameter for the `subscribe` method without getting into an error state on rejection
 
