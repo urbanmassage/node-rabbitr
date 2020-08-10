@@ -280,7 +280,7 @@ class Rabbitr {
       }
       catch(err) {
         // if we hit here, we should nack
-        if (!opts.skipBackoff) {
+        if (!opts || !opts.skipBackoff) {
           // super simple backoff achieved by just delaying performing a #nack
           await wait(BACKOFF_EXPIRY);
         }
