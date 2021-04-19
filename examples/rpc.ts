@@ -2,7 +2,6 @@ import Rabbitr = require('../');
 
 const rabbit = new Rabbitr({
   url: 'amqp://guest:guest@localhost',
-  queuePrefix: 'yo'
 });
 
 rabbit.rpcListener('example.rpc', null, function(message, cb) {
