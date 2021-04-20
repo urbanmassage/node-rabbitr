@@ -1,5 +1,10 @@
 # CHANGELOG
 
+# 12.0.0
+- Removes support for `queuePrefix` in the constructor options
+- Updates amqplib to `0.7.1`
+- Moves away from deprecated `new Buffer()` constructor format to `Buffer.from()` internally
+
 ## 11.1.9
 - Build on node 10 + 12
 
