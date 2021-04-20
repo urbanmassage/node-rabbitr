@@ -25,7 +25,7 @@ export function stringifyError(err, filter?, space?) {
 export function parse(json: string): any {
   return JSON.parse(json, function(key, value) {
     return value && value.type === 'Buffer'
-      ? new Buffer(value.data)
+      ? Buffer.from(value.data)
       : value;
   });
 }

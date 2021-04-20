@@ -38,7 +38,7 @@ describe('rabbitr#rpc', () => {
       testing: `return-${queueName}`,
     };
 
-    rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message) => {
       // here we'll assert that the data is the same
       expect(message.data).to.deep.equal(testData);
 
@@ -57,7 +57,7 @@ describe('rabbitr#rpc', () => {
 
     const error = new Error('Test');
 
-    rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message) => {
       throw error;
     });
 
@@ -82,7 +82,7 @@ describe('rabbitr#rpc', () => {
 
     const error = {a: 'b', c: 'd', name: 'Error', message: 'test'};
 
-    rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message) => {
       throw error;
     });
 
@@ -103,17 +103,17 @@ describe('rabbitr#rpc', () => {
 
     const data = 'Hello world!';
 
-    rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message) => {
       expect(message.data).to.be.an.instanceOf(Buffer);
       expect(message.data.toString()).to.equal(data);
-      return new Buffer(data);
+      return Buffer.from(data);
     });
 
     createdQueues.push(`rpc.${queueName}`);
 
     await wait(200);
 
-    const response = await rabbit.rpcExec(queueName, new Buffer(data));
+    const response = await rabbit.rpcExec(queueName, Buffer.from(data));
 
     expect(response).to.be.an.instanceOf(Buffer);
     expect(response.toString()).to.equal(data);
@@ -122,7 +122,7 @@ describe('rabbitr#rpc', () => {
   it(`throws a TimeoutError on timeout`, async () => {
     const queueName = `${v4()}.rpc_test`;
 
-    rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message) => {
       // No reply...
       await wait(10000);
       return null;

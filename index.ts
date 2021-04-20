@@ -181,7 +181,7 @@ class Rabbitr {
     await this._publishChannel.assertExchange(topic, 'topic', {});
 
     // then publish the message
-    const isSuccess = this._publishChannel.publish(topic, '*', new Buffer(stringify(data)), {
+    const isSuccess = this._publishChannel.publish(topic, '*', Buffer.from(stringify(data)), {
       contentType: 'application/json',
     });
 
@@ -326,7 +326,7 @@ class Rabbitr {
     });
 
     // now send the message direct into the timer
-    this._timerChannel.sendToQueue(timerQueue, new Buffer(stringify(data)), {
+    this._timerChannel.sendToQueue(timerQueue, Buffer.from(stringify(data)), {
       contentType: 'application/json',
       expiration: `${ttl}`,
     });
@@ -428,7 +428,7 @@ class Rabbitr {
         expiration: now + timeoutMS,
       };
       this.log('sending rpc request');
-      this._publishChannel.sendToQueue(rpcQueue, new Buffer(stringify(request)), {
+      this._publishChannel.sendToQueue(rpcQueue, Buffer.from(stringify(request)), {
         contentType: 'application/json',
         expiration: `${timeoutMS}`,
       });
@@ -522,7 +522,7 @@ class Rabbitr {
           message.ack();
 
           // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
-          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify(responseData)), {
+          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, Buffer.from(stringify(responseData)), {
             contentType: 'application/json',
           });
         }

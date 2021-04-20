@@ -5,7 +5,7 @@
   "main": "index",
   "scripts": {
     "build": "tsc",
-    "test": "mocha -gc --exit",
+    "test": "mocha --exit",
     "coverage": "nyc --reporter=lcov --reporter=text mocha --exit",
     "preversion": "npm run test -- --bail",
     "postversion": "git push --follow-tags"

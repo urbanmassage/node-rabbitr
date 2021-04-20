@@ -58,7 +58,7 @@ describe('rabbitr#pubsub', function() {
     .then(() => {
       createdQueues.push(queueName);
       createdExchanges.push(exchangeName);
-      setTimeout(() => {rabbit.send(exchangeName, new Buffer(data))}, 200);
+      setTimeout(() => {rabbit.send(exchangeName, Buffer.from(data))}, 200);
     });
   });
 });
