@@ -1,12 +1,11 @@
-import { cyan, red, yellow } from 'chalk';
-import { EventEmitter } from 'events';
-
 import * as amqplib from 'amqplib';
+import { cyan, red, yellow } from 'chalk';
 import { v4 } from 'node-uuid';
 import { fromCallback } from 'promise-cb';
+import { initWhitelist, log, shouldSkipSubscribe } from './lib/debug';
+import { parse, parseError, stringify, stringifyError } from './lib/serialization';
 import { wait } from './lib/wait';
-import { initWhitelist, shouldSkipSubscribe, log } from './lib/debug';
-import { stringify, stringifyError, parse, parseError } from './lib/serialization';
+
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
 const BACKOFF_EXPIRY = 2000; // we use a fixed backoff expiry for now of 2 seconds
@@ -72,16 +71,6 @@ class Rabbitr {
       }
     }
   }
-  private _formatName(name: string): string {
-    // TODO - rename this ???
-
-    // istanbul ignore next
-    if (this.opts.queuePrefix) {
-      name = `${this.opts.queuePrefix}.${name}`;
-    }
-
-    return name;
-  }
 
   /**
    * An array of channel names used for debug mode. If this value is set, calls to
@@ -96,7 +85,6 @@ class Rabbitr {
 
     this.opts = Object.assign({
       url: '',
-      queuePrefix: '',
       defaultRPCExpiry: DEFAULT_RPC_EXPIRY,
     }, opts);
     this.opts.connectionOpts = Object.assign({
@@ -155,7 +143,6 @@ class Rabbitr {
 
     // mark the connection as open and perform any 'setup' method if one is set
     this.connected = true;
-    await maybeFromCallback<void>(this.opts.setup || (() => Promise.resolve()));
 
     // mark this instance as 'ready' and end the promise
     this.ready = true;
@@ -174,12 +161,6 @@ class Rabbitr {
     this.ready = false;
     this.connected = false;
 
-    // close all the channels that are open
-    await Promise.all(this._openChannels.map(async (channel) => {
-      await channel.close.call(channel);
-      this.log('channel closed');
-    }));
-
     // close the connection
     await this.connection.close();
     this.log('connection closed');
@@ -197,10 +178,10 @@ class Rabbitr {
     this.log(yellow('send'), topic, data, opts);
 
     // first ensure the exchange exists
-    await this._publishChannel.assertExchange(this._formatName(topic), 'topic', {});
+    await this._publishChannel.assertExchange(topic, 'topic', {});
 
     // then publish the message
-    const isSuccess = this._publishChannel.publish(this._formatName(topic), '*', new Buffer(stringify(data)), {
+    const isSuccess = this._publishChannel.publish(topic, '*', Buffer.from(stringify(data)), {
       contentType: 'application/json',
     });
 
@@ -232,7 +213,7 @@ class Rabbitr {
     this._openChannels.push(channel);
 
     // ensure the queue we want to listen on actually exists
-    await channel.assertQueue(this._formatName(queueName), Object.assign({
+    await channel.assertQueue(queueName, Object.assign({
       durable: true,
     }, opts));
 
@@ -259,7 +240,7 @@ class Rabbitr {
         ++ this.pendingMessagesCount;
 
         // we create a new promise, and make the resolution an 'ack' and the rejection an 'nack'
-        await new Promise((ack: () => void, reject) => {
+        await new Promise<void>((ack: () => void, reject) => {
           const message: Rabbitr.IMessage<TMessage> = {
             send: this.send.bind(this),
             rpcExec: this.rpcExec.bind(this),
@@ -294,7 +275,7 @@ class Rabbitr {
     };
 
     // start consuming, and return the channel we opened for this subscription
-    await channel.consume(this._formatName(queueName), processMessage, {});
+    await channel.consume(queueName, processMessage, {});
     return channel;
   }
 
@@ -306,11 +287,11 @@ class Rabbitr {
 
     try {
       // make sure the queue and exchange exist
-      await channel.assertQueue(this._formatName(queue), null);
-      await channel.assertExchange(this._formatName(exchange), 'topic', null);
+      await channel.assertQueue(queue, null);
+      await channel.assertExchange(exchange, 'topic', null);
 
       // finally bind the queue + exchange together
-      await channel.bindQueue(this._formatName(queue), this._formatName(exchange), '*', {});
+      await channel.bindQueue(queue, exchange, '*', {});
     }
     catch(err) {
       // simply rethrow, try catch is just for finally
@@ -335,9 +316,9 @@ class Rabbitr {
     const timerQueue = this._timerQueueName(topic, uniqueID);
 
     // create the timer queue if it doesn't already exist
-    await this._timerChannel.assertQueue(this._formatName(timerQueue), {
+    await this._timerChannel.assertQueue(timerQueue, {
       durable: true,
-      deadLetterExchange: this._formatName(topic),
+      deadLetterExchange: topic,
       arguments: {
         'x-dead-letter-routing-key': '*',
       },
@@ -345,7 +326,7 @@ class Rabbitr {
     });
 
     // now send the message direct into the timer
-    this._timerChannel.sendToQueue(this._formatName(timerQueue), new Buffer(stringify(data)), {
+    this._timerChannel.sendToQueue(timerQueue, Buffer.from(stringify(data)), {
       contentType: 'application/json',
       expiration: `${ttl}`,
     });
@@ -384,7 +365,7 @@ class Rabbitr {
     const returnQueueName = `${rpcQueue}.return.${unique}`;
     const now = new Date().getTime();
     const channel = this._rpcReturnChannel;
-    const replyQueue = this._formatName(returnQueueName);
+    const replyQueue = returnQueueName;
 
     // used to determine whether we should ignore timeouts
     let isCompleted = false;
@@ -447,7 +428,7 @@ class Rabbitr {
         expiration: now + timeoutMS,
       };
       this.log('sending rpc request');
-      this._publishChannel.sendToQueue(this._formatName(rpcQueue), new Buffer(stringify(request)), {
+      this._publishChannel.sendToQueue(rpcQueue, Buffer.from(stringify(request)), {
         contentType: 'application/json',
         expiration: `${timeoutMS}`,
       });
@@ -541,7 +522,7 @@ class Rabbitr {
           message.ack();
 
           // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
-          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, new Buffer(stringify(responseData)), {
+          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, Buffer.from(stringify(responseData)), {
             contentType: 'application/json',
           });
         }
@@ -560,11 +541,6 @@ declare module Rabbitr {
     url: string;
     log?: (...args: string[]) => void;
 
-    /** preffixed to all queue names - useful for environment and app names etc */
-    queuePrefix?: string;
-
-    /** called once the connection is ready but before anything is bound (allows for ORM setup etc) */
-    setup?: ((done: Rabbitr.ErrorCallback) => void) | (() => PromiseLike<void>);
     connectionOpts?: {
       heartbeat?: boolean;
     };

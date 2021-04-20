@@ -1,7 +1,7 @@
-import Bluebird = require('bluebird');
 import Rabbitr = require('../');
 import { expect } from 'chai';
 import { v4 } from 'node-uuid';
+import { wait } from '../lib/wait';
 
 describe('shutdown', function() {
   it('should skip rpc after shutdown is triggered', () => {
@@ -31,7 +31,7 @@ describe('shutdown', function() {
         })
     )
     .then(() =>
-      Bluebird.all([
+      Promise.all([
         rabbit.destroy(),
         rabbit2.destroy(),
       ])
@@ -56,10 +56,11 @@ describe('shutdown', function() {
     const expected = {test: 40};
 
     return rabbit.rpcListener(queueName, {}, async (message) => {
-      return Bluebird.resolve(expected).delay(DELAY);
+      await wait(DELAY/2);
+      return Promise.resolve(expected);
     }).then(() =>
-      Bluebird.all([
-        Bluebird.delay(DELAY/2).then(() => (rabbit as any).shutdown()),
+      Promise.all([
+        wait(DELAY/2).then(() => (rabbit as any).shutdown()),
         rabbit2.rpcExec(queueName, {}, {timeout: DELAY + 20})
           .then(response => {
             expect(response).to.deep.equal(expected);
@@ -67,7 +68,7 @@ describe('shutdown', function() {
       ])
     )
     .then(() =>
-      Bluebird.all([
+      Promise.all([
         rabbit.destroy(),
         rabbit2.destroy(),
       ])

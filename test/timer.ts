@@ -1,7 +1,6 @@
 import Rabbitr = require('../');
 import { expect } from 'chai';
 import { v4 } from 'node-uuid';
-import { fromCallback } from 'promise-cb';
 import { wait } from '../lib/wait';
 
 const ACCEPTABLE_TIMER_THRESHOLD = 10;
@@ -16,12 +15,9 @@ describe('rabbitr#setTimer', function() {
     )
   );
 
-  const createdExchanges: string[] = [];
-  const createdQueues: string[] = [];
-
-  afterEach(() =>
-    rabbit.destroy()
-  );
+  afterEach(() => {
+    rabbit.destroy();
+  });
 
   it('should receive a message after a set number of milliseconds', function(done) {
     const DELAY = 50;
@@ -43,16 +39,12 @@ describe('rabbitr#setTimer', function() {
       expect(JSON.stringify(testData)).to.equal(JSON.stringify(message.data));
       done();
     })
-      .then(() => createdQueues.push(queueName))
-      .then(() =>
-        createdExchanges.push(queueName)
-      )
       .then(() =>
         rabbit.setTimer(queueName, 'unique_id_tester_1', testData, DELAY)
       );
   });
 
-  it('should not receive a message if #clearTimer is called', () => {
+  it('should not receive a message if #clearTimer is called', async () => {
     const DELAY = 50;
 
     const queueName = v4() + '.clear_timer_test';
@@ -67,11 +59,7 @@ describe('rabbitr#setTimer', function() {
       message.ack();
 
       receivedMessages++;
-    })
-      .then(() => createdQueues.push(queueName))
-      .then(() =>
-        createdExchanges.push(queueName)
-      );
+    });
 
     // set the timer and schedule the clear
     rabbit.setTimer(queueName, 'unique_clearing_test_id', testData, DELAY);
