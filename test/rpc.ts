@@ -52,6 +52,27 @@ describe('rabbitr#rpc', () => {
     expect(data).to.deep.equal(responseData);
   });
 
+  it(`should pass the context object through`, async () => {
+    const queueName = `${v4()}.rpc_test`;
+
+    const testContext = {
+      testProp: `rpc-example-context-${queueName}`,
+    };
+
+    await rabbit.rpcListener(queueName, {}, async (message) => {
+      // here we'll assert that the context data is the same
+      expect(message.context).to.deep.equal(testContext);
+
+      return {};
+    });
+
+    createdQueues.push(`rpc.${queueName}`);
+
+    const data = await rabbit.rpcExec(queueName, {}, {
+      context: testContext,
+    });
+  });
+
   it(`passes Error objects back`, async () => {
     const queueName = `${v4()}.rpc_test`;
 
