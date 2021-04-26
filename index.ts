@@ -426,6 +426,7 @@ class Rabbitr {
         d: data,
         returnQueue: replyQueue,
         expiration: now + timeoutMS,
+        context: opts?.context,
       };
       this.log('sending rpc request');
       this._publishChannel.sendToQueue(rpcQueue, Buffer.from(stringify(request)), {
@@ -495,7 +496,8 @@ class Rabbitr {
             return;
           }
 
-          const message: Rabbitr.IMessage<TInput> = <Rabbitr.IEnvelopedMessage<TInput> & Rabbitr.IMessage<TInput>>envelope;
+          const message: Rabbitr.IMessageWithContext<TInput> = <Rabbitr.IEnvelopedMessage<TInput> & Rabbitr.IMessage<TInput>>envelope;
+          message.context = dataEnvelope.context;
           message.data = dataEnvelope.d;
 
           let responseData: any;
@@ -558,6 +560,7 @@ declare module Rabbitr {
 
   export interface IRpcExecOptions {
     timeout?: number;
+    context?: any;
   }
   export interface IRpcListenerOptions<TInput, TOutput> {
     prefetch?: number;
@@ -596,11 +599,16 @@ declare module Rabbitr {
     };
   }
 
+  export interface IMessageWithContext<TData> extends IMessage<TData> {
+    context?: string;
+  }
+
   export interface IEnvelopedMessage<TData> extends IMessage<any> {
     data: {
-      d: TData,
-      expiration: number,
-      returnQueue: string,
+      d: TData;
+      expiration: number;
+      returnQueue: string;
+      context?: any;
     };
   }
 }
