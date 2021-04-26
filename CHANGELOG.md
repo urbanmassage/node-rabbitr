@@ -1,5 +1,8 @@
 # CHANGELOG
 
+# 12.1.0
+- Adds support for `context` within the opts object of `rpcExec` - this then appears in `message.context` on the `rpcListener` side
+
 # 12.0.0
 - Removes support for `queuePrefix` in the constructor options
 - Updates amqplib to `0.7.1`
