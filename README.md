@@ -14,23 +14,31 @@ var rabbit = new Rabbitr({
 });
 ```
 
+## Error handling for queues
+
+Any time you have an unhandled exception, it will cause a redelivery - this typically causes the message to be sent to another consumer of the same queue, in order to be retried. You can simulate this by writing a simple `throw new Error('test')` statement into the async function you define as the executor for your queue.
+
+This means you should typically handle, log, and swallow errors which will prevent the message ever being processed successfully, in order to avoid a "redelivery loop" (when a message keeps getting retried with no chance of succeeding). As an example, a temporary loss of a database connection would be sensible to force into a redelivery, however a validation error within the data of the message that requires fresh data to be submitted by a user may not want to be redelivered.
+
 ## Basic queue usage
 
 ```js
 // in one module
-rabbit.subscribe(['booking.create'], 'sms.send.booking.create', {}, (message) => {
+rabbit.subscribe(['booking.create'], 'sms.send.booking.create', {}, async (message) => {
 	// send an sms
-	message.ack();
+	console.log('send sms for', message.data.id);
 });
 
 // in another module
-rabbit.subscribe(['booking.create'], 'email.send.booking.create', {}, (message) => {
+rabbit.subscribe(['booking.create'], 'email.send.booking.create', {}, async (message) => {
 	// send an email
-	message.ack();
+	console.log('send email for', message.data.id);
 });
 
 // elsewhere
-rabbit.send('booking.create', {id: 1});
+async function createBooking() => {
+  await rabbit.send('booking.create', {id: 1});
+}
 ```
 
 ## Timers
@@ -38,29 +46,25 @@ Rabbitr makes using dead letter exchanges dead easy
 
 ```js
 // set timer
-rabbit.subscribe(['booking.create'], 'booking.not-confirmed.timer.set', {}, (message) => {
+rabbit.subscribe(['booking.create'], 'booking.not-confirmed.timer.set', {}, async (message) => {
   // do something to calculate how long we want the timer to last
-	var timeFromNow = 900000; // 15 mins
+	const timeFromNow = 900000; // 15 mins
 
-	rabbit.setTimer('booking.not-confirmed.timer.fire', message.data.id, {
+	await rabbit.setTimer('booking.not-confirmed.timer.fire', message.data.id, {
     id: message.data.id,
 	}, timeFromNow);
-
-	message.ack();
 });
 
 // clear timer if something has happened that means the timer action isn't required
-rabbit.subscribe(['booking.confirm'], 'booking.not-confirmed.timer.clear', {}, (message) => {
-	rabbit.clearTimer('booking.not-confirmed.timer.fire', message.data.id);
-
-	message.ack();
+rabbit.subscribe(['booking.confirm'], 'booking.not-confirmed.timer.clear', {}, async (message) => {
+	await rabbit.clearTimer('booking.not-confirmed.timer.fire', message.data.id);
 });
 
 // handle the timer firing
-rabbit.subscribe(['booking.not-confirmed.timer.fire'], 'booking.not-confirmed.timer.fire', {}, (message) => {
+rabbit.subscribe(['booking.not-confirmed.timer.fire'], 'booking.not-confirmed.timer.fire', {}, async (message) => {
 	// do something off the back of the timer firing
 	// in this example, message.data.id is the booking id that wasn't confirmed in time
-	message.ack();
+	console.log('firing for id', message.data.id);
 });
 ```
 
