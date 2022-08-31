@@ -8,7 +8,7 @@ import { wait } from './lib/wait';
 
 
 const DEFAULT_RPC_EXPIRY = 15000; // 15 seconds
-const BACKOFF_EXPIRY = 2000; // we use a fixed backoff expiry for now of 2 seconds
+const BACKOFF_EXPIRY_MS = 2000; // we use a fixed backoff expiry for now of 2 seconds
 
 function maybeFromCallback<T>(fn: ((done: Rabbitr.Callback<T>) => void) | (() => PromiseLike<T>)): Promise<T> {
   let callback: Rabbitr.Callback<T>;
@@ -208,6 +208,8 @@ class Rabbitr {
       return;
     }
 
+    const backoffQueueName = `backoff.${queueName}`;
+
     // first, open a unique connection for this subscription
     const channel = await this.connection.createChannel();
     this._openChannels.push(channel);
@@ -216,6 +218,23 @@ class Rabbitr {
     await channel.assertQueue(queueName, Object.assign({
       durable: true,
     }, opts));
+
+    if (opts?.skipBackoff !== true) {
+      const requeueExchangeName = `requeue.${queueName}`;
+
+      // create the backoff queue
+      await channel.assertQueue(backoffQueueName, {
+        durable: true,
+        deadLetterExchange: requeueExchangeName,
+        arguments: {
+          'x-dead-letter-routing-key': '*',
+        },
+        messageTtl: BACKOFF_EXPIRY_MS,
+      });
+
+      // create an exchange that allows requeing back to the main queue
+      await this._bindExchangeToQueue(requeueExchangeName, queueName);
+    }
 
     // set the concurrency on the channel
     channel.prefetch(opts && opts.prefetch || 1);
@@ -260,13 +279,23 @@ class Rabbitr {
         channel.ack(msg);
       }
       catch(err) {
-        // if we hit here, we should nack
-        if (!opts || !opts.skipBackoff) {
-          // super simple backoff achieved by just delaying performing a #nack
-          await wait(BACKOFF_EXPIRY);
+        // if we hit here, we have an error
+        if (opts?.skipBackoff !== true) {
+          // backoff works by sending to a queue with an expiration
+          // which then routes back into our main queue
+          this.log(`backing off msg on ${cyan(queueName)}`, data);
+          await channel.sendToQueue(backoffQueueName, msg.content, {
+            contentType: msg.properties.contentType,
+          });
+
+          // we have to ack this message to prevent a double redelivery
+          await channel.ack(msg);
         }
-        this.log(`rejecting on ${cyan(queueName)}`, data);
-        channel.nack(msg);
+        else {
+          //
+          this.log(`rejecting on ${cyan(queueName)}`, data);
+          channel.nack(msg);
+        }
       }
       finally {
         -- this.pendingMessagesCount;

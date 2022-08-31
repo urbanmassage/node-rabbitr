@@ -1,7 +1,7 @@
 import Rabbitr = require('../');
 import { expect } from 'chai';
 import { v4 } from 'node-uuid';
-import { fromCallback } from 'promise-cb';
+import { wait } from '../lib/wait';
 
 describe('rabbitr#backoff', function() {
   let rabbit: Rabbitr;
@@ -66,8 +66,49 @@ describe('rabbitr#backoff', function() {
       }
     });
     createdQueues.push(queueName);
+    createdQueues.push(`backoff.${queueName}`);
     createdExchanges.push(exchangeName);
+    createdExchanges.push(`requeue.${exchangeName}`);
 
     setTimeout(() => {rabbit.send(exchangeName, testData)}, 200);
+  });
+
+  it('should allow a successful message to get in front of a failing one', function(done) {
+    this.timeout(60000);
+
+    const exchangeName = v4() + '.backoff_test';
+    const queueName = v4() + '.backoff_test';
+
+    rabbit.subscribe([exchangeName], queueName, {}, (message) => {
+      if (message.data.should === 'fail') {
+        message.reject();
+      }
+      else {
+        message.ack();
+        setTimeout(() => {
+          done();
+        }, 100);
+      }
+    });
+
+    createdQueues.push(queueName);
+    createdQueues.push(`backoff.${queueName}`);
+    createdExchanges.push(exchangeName);
+    createdExchanges.push(`requeue.${exchangeName}`);
+
+    wait(200).then(async () => {
+      await rabbit.send(exchangeName, {
+        should: 'fail',
+      });
+      await rabbit.send(exchangeName, {
+        should: 'fail',
+      });
+
+      await wait(100);
+
+      await rabbit.send(exchangeName, {
+        should: 'succeed',
+      });
+    });
   });
 });
