@@ -3,7 +3,8 @@
     "target": "es6",
     "module": "commonjs",
     "sourceMap": true,
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "strict": true,
   },
   "compileOnSave": true,
   "include": [

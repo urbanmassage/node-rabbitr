@@ -18,10 +18,10 @@ describe('rabbitr#rpc', () => {
     await Promise.all([
       // cleanup
       ...createdExchanges.map(exchangeName =>
-        rabbit._cachedChannel.deleteExchange(exchangeName, {})
+        rabbit._cachedChannel?.deleteExchange(exchangeName, {})
       ),
       ...createdQueues.map(queueName =>
-        rabbit._cachedChannel.deleteQueue(queueName, {})
+        rabbit._cachedChannel?.deleteQueue(queueName, {})
       ),
     ]);
 
@@ -38,7 +38,7 @@ describe('rabbitr#rpc', () => {
       testing: `return-${queueName}`,
     };
 
-    await rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message: any) => {
       // here we'll assert that the data is the same
       expect(message.data).to.deep.equal(testData);
 
@@ -59,7 +59,7 @@ describe('rabbitr#rpc', () => {
       testProp: `rpc-example-context-${queueName}`,
     };
 
-    await rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message: any) => {
       // here we'll assert that the context data is the same
       expect(message.context).to.deep.equal(testContext);
 
@@ -78,7 +78,7 @@ describe('rabbitr#rpc', () => {
 
     const error = new Error('Test');
 
-    await rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message: any) => {
       throw error;
     });
 
@@ -103,7 +103,7 @@ describe('rabbitr#rpc', () => {
 
     const error = {a: 'b', c: 'd', name: 'Error', message: 'test'};
 
-    await rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message: unknown) => {
       throw error;
     });
 
@@ -124,7 +124,7 @@ describe('rabbitr#rpc', () => {
 
     const data = 'Hello world!';
 
-    await rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message: any) => {
       expect(message.data).to.be.an.instanceOf(Buffer);
       expect(message.data.toString()).to.equal(data);
       return Buffer.from(data);
@@ -143,7 +143,7 @@ describe('rabbitr#rpc', () => {
   it(`throws a TimeoutError on timeout`, async () => {
     const queueName = `${v4()}.rpc_test`;
 
-    await rabbit.rpcListener(queueName, {}, async (message) => {
+    await rabbit.rpcListener(queueName, {}, async (message: unknown) => {
       // No reply...
       await wait(10000);
       return null;

@@ -1,4 +1,5 @@
 import * as amqplib from 'amqplib';
+// @ts-ignore
 import { cyan, red, yellow } from 'chalk';
 import { v4 } from 'node-uuid';
 import { fromCallback } from 'promise-cb';
@@ -14,6 +15,7 @@ function maybeFromCallback<T>(fn: ((done: Rabbitr.Callback<T>) => void) | (() =>
   let callback: Rabbitr.Callback<T>;
   let promise = fromCallback<T>(_callback => (callback = _callback) && void 0);
 
+  // @ts-ignore
   let val = (fn as Function)(callback);
   if (val && val.then) {
     return Promise.resolve<T>(val);
@@ -42,17 +44,17 @@ class Rabbitr {
   /** @deprecated */
   protected connected = false;
 
-  protected connection: amqplib.Connection;
+  protected connection?: amqplib.Connection;
 
   protected log = log;
 
   private _openChannels: amqplib.Channel[];
 
-  private _timerChannel: amqplib.Channel;
-  private _backoffChannel: amqplib.Channel;
-  private _publishChannel: amqplib.Channel;
-  private _rpcReturnChannel: amqplib.Channel;
-  _cachedChannel: amqplib.Channel;
+  private _timerChannel?: amqplib.Channel;
+  private _backoffChannel?: amqplib.Channel;
+  private _publishChannel?: amqplib.Channel;
+  private _rpcReturnChannel?: amqplib.Channel;
+  _cachedChannel?: amqplib.Channel;
 
   private connectionPromise: Promise<amqplib.Connection>;
 
@@ -78,7 +80,7 @@ class Rabbitr {
    *
    * This option is set from the environment variable `RABBITR_DEBUG`.
    */
-  private debugChannelsWhitelist: string[] | void;
+  private debugChannelsWhitelist: string[] | null;
 
   constructor(opts: Rabbitr.IOptions) {
     this.debugChannelsWhitelist = initWhitelist();
@@ -162,9 +164,11 @@ class Rabbitr {
     this.connected = false;
 
     // close the connection
-    await this.connection.close();
+    await this.connection?.close();
     this.log('connection closed');
+    // @ts-ignore
     this.connectionPromise = null;
+    // @ts-ignore
     this.connection = null;
   }
 
@@ -178,10 +182,10 @@ class Rabbitr {
     this.log(yellow('send'), topic, data, opts);
 
     // first ensure the exchange exists
-    await this._publishChannel.assertExchange(topic, 'topic', {});
+    await this._publishChannel?.assertExchange(topic, 'topic', {});
 
     // then publish the message
-    const isSuccess = this._publishChannel.publish(topic, '*', Buffer.from(stringify(data)), {
+    const isSuccess = this._publishChannel?.publish(topic, '*', Buffer.from(stringify(data)), {
       contentType: 'application/json',
     });
 
@@ -205,17 +209,18 @@ class Rabbitr {
     ) {
       // this queueName should be skipped as it's not in the 'debug whitelist'
       this.log(red('skipped'), cyan('subscribe'), queueName);
+      // @ts-ignore
       return;
     }
 
     const backoffQueueName = `backoff.${queueName}`;
 
     // first, open a unique connection for this subscription
-    const channel = await this.connection.createChannel();
-    this._openChannels.push(channel);
+    const channel = await this.connection?.createChannel();
+    this._openChannels.push(channel!);
 
     // ensure the queue we want to listen on actually exists
-    await channel.assertQueue(queueName, Object.assign({
+    await channel!.assertQueue(queueName, Object.assign({
       durable: true,
     }, opts));
 
@@ -223,7 +228,7 @@ class Rabbitr {
       const requeueExchangeName = `requeue.${queueName}`;
 
       // create the backoff queue
-      await channel.assertQueue(backoffQueueName, {
+      await channel?.assertQueue(backoffQueueName, {
         durable: true,
         deadLetterExchange: requeueExchangeName,
         arguments: {
@@ -237,14 +242,14 @@ class Rabbitr {
     }
 
     // set the concurrency on the channel
-    channel.prefetch(opts && opts.prefetch || 1);
+    channel?.prefetch(opts && opts.prefetch || 1);
 
     // define the internal message processing handler
     const processMessage = async (msg: any) => {
       if (!msg) return;
       if (this.isShuttingDown) {
         this.log(`${red('rejected')} message on queueName ${yellow(queueName)} because we're shutting down`);
-        channel.nack(msg);
+        channel?.nack(msg);
         return;
       }
 
@@ -262,10 +267,11 @@ class Rabbitr {
         await new Promise<void>((ack: () => void, reject) => {
           const message: Rabbitr.IMessage<TMessage> = {
             send: this.send.bind(this),
+            // @ts-ignore
             rpcExec: this.rpcExec.bind(this),
             topic: queueName,
             data,
-            channel,
+            channel: channel!,
             ack,
             reject,
             properties: msg.properties,
@@ -276,7 +282,7 @@ class Rabbitr {
 
         // if we hit here, we should ack
         this.log(`acking on ${cyan(queueName)}`, data);
-        channel.ack(msg);
+        channel?.ack(msg);
       }
       catch(err) {
         // if we hit here, we have an error
@@ -284,17 +290,17 @@ class Rabbitr {
           // backoff works by sending to a queue with an expiration
           // which then routes back into our main queue
           this.log(`backing off msg on ${cyan(queueName)}`, data);
-          await channel.sendToQueue(backoffQueueName, msg.content, {
+          await channel?.sendToQueue(backoffQueueName, msg.content, {
             contentType: msg.properties.contentType,
           });
 
           // we have to ack this message to prevent a double redelivery
-          await channel.ack(msg);
+          await channel?.ack(msg);
         }
         else {
           //
           this.log(`rejecting on ${cyan(queueName)}`, data);
-          channel.nack(msg);
+          channel?.nack(msg);
         }
       }
       finally {
@@ -304,23 +310,25 @@ class Rabbitr {
     };
 
     // start consuming, and return the channel we opened for this subscription
-    await channel.consume(queueName, processMessage, {});
-    return channel;
+    await channel?.consume(queueName, processMessage, {});
+    return channel!;
   }
 
   private async _bindExchangeToQueue(exchange: string, queue: string): Promise<void> {
     await this.connectionPromise;
     this.log(cyan('bindExchangeToQueue'), exchange, queue);
 
-    const channel = await this.connection.createChannel();
+    const channel = await this.connection?.createChannel();
 
     try {
       // make sure the queue and exchange exist
+      // @ts-ignore
       await channel.assertQueue(queue, null);
+      // @ts-ignore
       await channel.assertExchange(exchange, 'topic', null);
 
       // finally bind the queue + exchange together
-      await channel.bindQueue(queue, exchange, '*', {});
+      await channel?.bindQueue(queue, exchange, '*', {});
     }
     catch(err) {
       // simply rethrow, try catch is just for finally
@@ -328,7 +336,7 @@ class Rabbitr {
     }
     finally {
       // make sure to close the channel we opened
-      await channel.close();
+      await channel?.close();
     }
   }
 
@@ -345,7 +353,7 @@ class Rabbitr {
     const timerQueue = this._timerQueueName(topic, uniqueID);
 
     // create the timer queue if it doesn't already exist
-    await this._timerChannel.assertQueue(timerQueue, {
+    await this._timerChannel?.assertQueue(timerQueue, {
       durable: true,
       deadLetterExchange: topic,
       arguments: {
@@ -355,7 +363,7 @@ class Rabbitr {
     });
 
     // now send the message direct into the timer
-    this._timerChannel.sendToQueue(timerQueue, Buffer.from(stringify(data)), {
+    this._timerChannel?.sendToQueue(timerQueue, Buffer.from(stringify(data)), {
       contentType: 'application/json',
       expiration: `${ttl}`,
     });
@@ -366,7 +374,7 @@ class Rabbitr {
     const timerQueue = this._timerQueueName(topic, uniqueID);
     this.log(yellow('clearTimer'), timerQueue);
 
-    await this._timerChannel.deleteQueue(timerQueue, {});
+    await this._timerChannel?.deleteQueue(timerQueue, {});
   }
 
   // rpc helper methods
@@ -377,6 +385,7 @@ class Rabbitr {
     this.log(`creating temp queue ${cyan(queueName)}`);
     await channel.assertQueue(queueName, {
       exclusive: true,
+      // @ts-ignore
       expires: (this.opts.defaultRPCExpiry * 1 + 1000),
       durable: false,
     });
@@ -399,11 +408,11 @@ class Rabbitr {
     // used to determine whether we should ignore timeouts
     let isCompleted = false;
 
-    let replyConsumerTag: string = null;
+    let replyConsumerTag: string | null = null;
 
     try {
       // bind the response queue
-      await this._createTempQueue(replyQueue, channel);
+      await this._createTempQueue(replyQueue, channel!);
       this.log(`using rpc return queue ${cyan(returnQueueName)}`);
 
       const timeoutMS = opts && opts.timeout || this.opts.defaultRPCExpiry || DEFAULT_RPC_EXPIRY;
@@ -411,7 +420,7 @@ class Rabbitr {
       // define a promise that will start now, and collect the result that comes back on the response queue
       const resultPromise = new Promise((completed: (responseData: TOutput) => void, failed) => {
         // define a method that the #consume method will call
-        const gotReply = (msg) => {
+        const gotReply = (msg?: any) => {
           if (!msg) return;
           this.log('got rpc reply', msg.content);
 
@@ -443,7 +452,7 @@ class Rabbitr {
           }
         };
 
-        channel.consume(replyQueue, gotReply, {noAck: true}).then((response) => {
+        channel?.consume(replyQueue, gotReply, {noAck: true}).then((response) => {
           replyConsumerTag = response.consumerTag;
         }).catch((err) => {
           failed(err);
@@ -458,12 +467,13 @@ class Rabbitr {
         context: opts?.context,
       };
       this.log('sending rpc request');
-      this._publishChannel.sendToQueue(rpcQueue, Buffer.from(stringify(request)), {
+      this._publishChannel?.sendToQueue(rpcQueue, Buffer.from(stringify(request)), {
         contentType: 'application/json',
         expiration: `${timeoutMS}`,
       });
 
       // race the result against a timeout promise
+      // @ts-ignore
       const result = await Promise.race<TOutput>([
         resultPromise,
         wait(timeoutMS).then(() => {
@@ -476,6 +486,7 @@ class Rabbitr {
         })
       ]);
 
+      // @ts-ignore
       return result;
     }
     catch(err) {
@@ -484,12 +495,12 @@ class Rabbitr {
     }
     finally {
       // clean up our temp queue now we're done
-      channel.deleteQueue(replyQueue, {}).catch((err) => {
+      channel?.deleteQueue(replyQueue, {}).catch((err) => {
         this.log(`failed to remove temp queue ${replyQueue} due to error `, err);
       });
 
       if (replyConsumerTag) {
-        channel.cancel(replyConsumerTag).catch((err) => {
+        channel?.cancel(replyConsumerTag).catch((err) => {
           this.log(`failed to cancel replyConsumerTag ${replyConsumerTag} due to error `, err);
         });
       }
@@ -531,6 +542,7 @@ class Rabbitr {
 
           let responseData: any;
           try {
+            // @ts-ignore
             const response = await maybeFromCallback(executor.bind(null, message));
             responseData = { response };
             this.log(`${yellow('rpcListener')} responding to topic ${cyan(topic)} with`, response);
@@ -553,7 +565,7 @@ class Rabbitr {
           message.ack();
 
           // doesn't need wrapping in this.formatName as the rpcExec function already formats the return queue name as required
-          this._publishChannel.sendToQueue(dataEnvelope.returnQueue, Buffer.from(stringify(responseData)), {
+          this._publishChannel?.sendToQueue(dataEnvelope.returnQueue, Buffer.from(stringify(responseData)), {
             contentType: 'application/json',
           });
         }

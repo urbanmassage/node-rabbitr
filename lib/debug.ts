@@ -1,6 +1,6 @@
 export const log = require('debug')('rabbitr');
 
-export function initWhitelist(): string[] | void {
+export function initWhitelist(): string[] | null {
   const {RABBITR_DEBUG} = process.env;
   if (RABBITR_DEBUG) {
     const channelsWhitelist = RABBITR_DEBUG.split(',');
@@ -13,7 +13,7 @@ export function initWhitelist(): string[] | void {
   return null;
 }
 
-export function shouldSkipSubscribe(whitelist: string[] | void, topic: string): boolean {
+export function shouldSkipSubscribe(whitelist: string[] | null, topic: string): boolean {
   if (!whitelist) return false;
 
   if ((whitelist as string[]).indexOf(topic) === -1) {

@@ -5,6 +5,7 @@ import { fromCallback } from 'promise-cb';
 import { wait } from '../lib/wait';
 
 const timesAsync = (times: number, fn: (step: number) => PromiseLike<any>) => {
+  // @ts-ignore
   let step = (n: number) => {
     if (n === times) return;
     return Promise.resolve(n).then(fn).then(() => step(n + 1));
@@ -44,6 +45,7 @@ describe('rabbitr#destroy', () => {
     await rabbit.destroy();
   });
 
+  // @ts-ignore
   let ifGcIt = global.gc && parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) >= 5 ? it : it.skip;
 
   ifGcIt('doesn\'t leak', function(done) {

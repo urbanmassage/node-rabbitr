@@ -20,10 +20,10 @@ describe('rabbitr#backoff', function() {
     Promise.all([
       // cleanup
       ...createdExchanges.map(exchangeName =>
-        rabbit._cachedChannel.deleteExchange(exchangeName, {})
+        rabbit._cachedChannel?.deleteExchange(exchangeName, {})
       ),
       ...createdQueues.map(queueName =>
-        rabbit._cachedChannel.deleteQueue(queueName, {})
+        rabbit._cachedChannel?.deleteQueue(queueName, {})
       ),
     ]).then(() => rabbit.destroy())
   );
@@ -39,7 +39,7 @@ describe('rabbitr#backoff', function() {
     };
 
     let receivedIncrementer = 0;
-    let lastReceivedUnixMS = null;
+    let lastReceivedUnixMS: null | number = null;
 
     rabbit.subscribe([exchangeName], queueName, {}, (message) => {
       receivedIncrementer++;
