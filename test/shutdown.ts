@@ -17,7 +17,7 @@ describe('shutdown', function() {
       log: require('debug')('rabbit2'),
     });
 
-    return rabbit.rpcListener(queueName, {}, async (message) => {
+    return rabbit.rpcListener(queueName, {}, async (message: unknown) => {
       throw new Error('Got a message on non-whitelisted queue');
     }).then(() =>
       (rabbit as any).shutdown()
@@ -55,7 +55,7 @@ describe('shutdown', function() {
 
     const expected = {test: 40};
 
-    return rabbit.rpcListener(queueName, {}, async (message) => {
+    return rabbit.rpcListener(queueName, {}, async (message: unknown) => {
       await wait(DELAY/2);
       return Promise.resolve(expected);
     }).then(() =>

@@ -1,4 +1,5 @@
 // istanbul ignore next
+// @ts-ignore
 if (parseFloat(process.version.match(/^v(\d+\.\d+)/)[1]) < 0.4) {
   // Monkey-patch :(
   // https://github.com/nodejs/node-v0.x-archive/issues/5110
@@ -12,11 +13,12 @@ export function stringify(obj: any): string {
 }
 
 // helper function to properly stringify an error object
-export function stringifyError(err, filter?, space?) {
+export function stringifyError(err: Error, filter?: any, space?: number) {
   var plainObject = {
     stack: err.stack,
   };
   Object.getOwnPropertyNames(err).forEach(function(key) {
+    // @ts-ignore
     plainObject[key] = err[key];
   });
   return JSON.stringify(plainObject, filter, space);

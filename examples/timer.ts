@@ -3,6 +3,7 @@ const rabbit = new Rabbitr({
   url: 'amqp://guest:guest@localhost'
 });
 
+// @ts-ignore
 rabbit.subscribe(['example.timer'], 'example.timer', null, (message) => {
   console.log('Got delayed message', message);
   console.log('Delayed message data is', message.data);

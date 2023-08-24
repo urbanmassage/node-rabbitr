@@ -18,7 +18,7 @@ describe('debug', function() {
 
     const response = {test: 2};
 
-    rabbit.rpcListener(queueName, {}, async (message) => {
+    rabbit.rpcListener(queueName, {}, async (message: unknown) => {
       return response;
     })
     .then(() => {
@@ -40,7 +40,7 @@ describe('debug', function() {
       url: process.env.RABBITMQ_URL || 'amqp://guest:guest@localhost/%2F',
     });
 
-    rabbit.rpcListener(queueName, {}, message => {
+    rabbit.rpcListener(queueName, {}, (message: unknown) => {
       throw new Error('Got a message on non-whitelisted queue');
     }).then(() => {
       return rabbit.rpcExec(queueName, {}, {timeout: 100})

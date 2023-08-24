@@ -3,6 +3,7 @@ const rabbit = new Rabbitr({
   url: 'amqp://guest:guest@localhost'
 });
 
+// @ts-ignore
 rabbit.subscribe(['example.timer.to-clear'], 'example.timer.to-clear', null, (message) => {
   console.log('This should never fire!!!!');
 
